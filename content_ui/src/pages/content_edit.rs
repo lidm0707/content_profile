@@ -3,6 +3,7 @@ use crate::models::{Content, ContentRequest, Tag};
 use crate::routes::Route;
 use crate::services::{ContentService, TagService};
 use dioxus::prelude::*;
+use tracing::{debug, info, warn};
 
 /// Content edit page component - handles both creating and editing content
 #[component]
@@ -20,9 +21,21 @@ pub fn ContentEdit(id: i32) -> Element {
     let content_resource = use_resource(move || {
         let content_service = content_service_clone.clone();
         async move {
+            debug!(
+                "Loading content resource - is_editing: {}, id: {}",
+                is_editing, id
+            );
             if is_editing {
-                content_service.get_content_by_id(id).await
+                info!("Fetching content by ID: {}", id);
+                let result = content_service.get_content_by_id(id).await;
+                match &result {
+                    Ok(Some(content)) => debug!("Successfully loaded content: {}", content.title),
+                    Ok(None) => warn!("Content not found with ID: {}", id),
+                    Err(e) => warn!("Failed to load content: {}", e),
+                }
+                result
             } else {
+                debug!("Creating new content - skipping fetch");
                 Ok(None)
             }
         }
@@ -66,21 +79,34 @@ pub fn ContentEdit(id: i32) -> Element {
         "Fill in the details below to create new content".to_string()
     };
 
-    // Update current content when resource loads
+    debug!(
+        "ContentEdit page initialized - is_editing: {}, id: {}, title: {}",
+        is_editing, id, page_title
+    );
+
+    // Update current_content when content_resource loads
     use_effect(move || {
         if let Some(result) = content_resource.read().as_ref() {
             match result {
                 Ok(Some(content)) => {
                     current_content.set(Some(content.clone()));
+                    debug!(
+                        "Content loaded for editing - ID: {}, title: {}, status: {}",
+                        content.id.unwrap_or(0),
+                        content.title,
+                        content.status
+                    );
                 }
                 Ok(None) if !is_editing => {
-                    // Creating new content, nothing to load
+                    debug!("Initializing for new content creation - status will default to draft");
                 }
                 Ok(None) => {
                     error_message.set(Some("Content not found".to_string()));
+                    warn!("Content not found with ID: {}", id);
                 }
                 Err(err) => {
                     error_message.set(Some(format!("Failed to load content: {}", err)));
+                    warn!("Failed to load content with ID {}: {}", id, err);
                 }
             }
         }

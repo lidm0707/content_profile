@@ -1,6 +1,6 @@
 use crate::models::{Content, ContentRequest};
 use crate::services::{LocalStorageService, SupabaseService};
-use crate::utils::config::{get_config, AppMode};
+use crate::utils::config::{AppMode, get_config};
 use dioxus::prelude::*;
 use tracing::{debug, info, trace};
 
@@ -25,19 +25,16 @@ impl ContentService {
     }
 
     /// Gets the current app mode
-    #[allow(dead_code)]
     pub fn mode(&self) -> AppMode {
         self.mode
     }
 
     /// Checks if running in office mode
-    #[allow(dead_code)]
     pub fn is_office_mode(&self) -> bool {
         self.mode == AppMode::Office
     }
 
     /// Checks if running in Supabase mode
-    #[allow(dead_code)]
     pub fn is_supabase_mode(&self) -> bool {
         self.mode == AppMode::Supabase
     }
@@ -73,7 +70,6 @@ impl ContentService {
     }
 
     /// Fetches content by slug
-    #[allow(dead_code)]
     pub async fn get_content_by_slug(&self, slug: &str) -> Result<Option<Content>, String> {
         debug!("Getting content by slug '{}' (mode: {:?})", slug, self.mode);
         match self.mode {
@@ -129,7 +125,6 @@ impl ContentService {
     }
 
     /// Deletes a content item
-    #[allow(dead_code)]
     pub async fn delete_content(&self, id: i32) -> Result<(), String> {
         match self.mode {
             AppMode::Office => self.local_service.delete_content(id),
@@ -138,7 +133,6 @@ impl ContentService {
     }
 
     /// Fetches content by status
-    #[allow(dead_code)]
     pub async fn get_content_by_status(&self, status: &str) -> Result<Vec<Content>, String> {
         match self.mode {
             AppMode::Office => self.local_service.get_content_by_status(status),
@@ -147,13 +141,11 @@ impl ContentService {
     }
 
     /// Gets local storage service directly
-    #[allow(dead_code)]
     pub fn local_service(&self) -> &LocalStorageService {
         &self.local_service
     }
 
     /// Gets remote storage service directly
-    #[allow(dead_code)]
     pub fn remote_service(&self) -> &SupabaseService {
         &self.remote_service
     }

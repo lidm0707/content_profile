@@ -33,7 +33,6 @@ impl LocalStorageService {
         Ok(contents.iter().find(|c| c.id == Some(id)).cloned())
     }
 
-    #[allow(dead_code)]
     /// Fetches content by slug
     pub fn get_content_by_slug(&self, slug: &str) -> Result<Option<Content>, String> {
         let contents = self.contents.read().map_err(|e| e.to_string())?;
@@ -100,7 +99,6 @@ impl LocalStorageService {
         Ok(content)
     }
 
-    #[allow(dead_code)]
     /// Deletes a content item
     pub fn delete_content(&self, id: i32) -> Result<(), String> {
         let mut contents = self.contents.write().map_err(|e| e.to_string())?;
@@ -117,7 +115,6 @@ impl LocalStorageService {
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Fetches content by status
     pub fn get_content_by_status(&self, status: &str) -> Result<Vec<Content>, String> {
         let contents = self.contents.read().map_err(|e| e.to_string())?;
@@ -150,7 +147,6 @@ impl LocalStorageService {
         Ok(synced)
     }
 
-    #[allow(dead_code)]
     /// Gets unsynced content (content that doesn't exist remotely)
     pub fn get_unsynced_content(&self, remote_ids: &[i32]) -> Result<Vec<Content>, String> {
         let contents = self.contents.read().map_err(|e| e.to_string())?;
@@ -167,7 +163,6 @@ impl LocalStorageService {
             .collect())
     }
 
-    #[allow(dead_code)]
     /// Clears all local content
     pub fn clear_all(&self) -> Result<(), String> {
         let mut contents = self.contents.write().map_err(|e| e.to_string())?;

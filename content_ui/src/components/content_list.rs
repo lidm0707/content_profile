@@ -1,6 +1,7 @@
 use crate::models::Content;
 use crate::routes::Route;
 use dioxus::prelude::*;
+use tracing::debug;
 
 /// Props for the content list component
 #[derive(Clone, PartialEq, Props)]
@@ -40,6 +41,11 @@ pub fn ContentList(props: ContentListProps) -> Element {
 /// Individual content card component
 #[component]
 fn ContentCard(content: Content) -> Element {
+    debug!(
+        "Rendering content card - ID: {:?}, title: {}, status: {}",
+        content.id, content.title, content.status
+    );
+
     let status_color = match content.status.as_str() {
         "published" => "bg-green-100 text-green-800",
         "draft" => "bg-yellow-100 text-yellow-800",
@@ -104,6 +110,13 @@ fn ContentCard(content: Content) -> Element {
                     Link {
                         to: Route::ContentEdit { id: content.id.unwrap_or(0) },
                         class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium",
+                        onclick: move |_| {
+                            debug!(
+                                "Edit clicked for content - ID: {:?}, title: {}",
+                                content.id,
+                                content.title
+                            );
+                        },
                         "Edit →"
                     }
                 }

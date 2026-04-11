@@ -4,7 +4,6 @@ use std::time::Duration;
 
 /// Sync direction enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SyncDirection {
     Pull,
     Push,
@@ -28,7 +27,6 @@ impl SyncService {
     }
 
     /// Syncs content from remote to local (pull)
-    #[allow(dead_code)]
     pub async fn sync_pull(&self) -> Result<(), String> {
         match self.remote_service.get_all_content().await {
             Ok(remote_contents) => {
@@ -42,7 +40,6 @@ impl SyncService {
     }
 
     /// Syncs content from local to remote (push)
-    #[allow(dead_code)]
     pub async fn sync_push(&self) -> Result<(), String> {
         match self.remote_service.get_all_content().await {
             Ok(remote_contents) => {

@@ -1,6 +1,7 @@
 use crate::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use crate::utils::markdown::update_tags_in_frontmatter;
 use dioxus::prelude::*;
+use tracing::debug;
 
 /// Props for the content form component
 #[derive(Clone, PartialEq, Props)]
@@ -51,12 +52,14 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             .unwrap_or_default()
     });
     let mut status = use_signal(|| {
-        props
+        let status_value = props
             .content
             .read()
             .as_ref()
             .map(|c| c.status.clone())
-            .unwrap_or_else(|| STATUS_DRAFT.to_string())
+            .unwrap_or_else(|| STATUS_DRAFT.to_string());
+        debug!("Status signal initialized with value: {}", status_value);
+        status_value
     });
     let mut isSubmitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
@@ -80,6 +83,10 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             body.set(content.body.clone());
             status.set(content.status.clone());
             selected_tag_ids.set(content.tags.clone().unwrap_or_default());
+            debug!(
+                "Content effect updated - title: {}, status: {}",
+                content.title, content.status
+            );
         }
     });
 
@@ -115,14 +122,25 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
         let updated_body = update_tags_in_frontmatter(&body.read(), &selected_tags);
 
+        let current_status = status.read().clone();
+        debug!(
+            "Form submission - title: {}, slug: {}, status: {}, tags: {:?}",
+            title.read(),
+            slug.read(),
+            current_status,
+            selected_tag_ids.read()
+        );
+
         let request = ContentRequest {
+            id: props.content.read().as_ref().and_then(|c| c.id),
             title: title.read().clone(),
             slug: slug.read().clone(),
             body: updated_body,
-            status: status.read().clone(),
+            status: current_status,
             tags: Some(selected_tag_ids.read().clone()),
         };
 
+        debug!("ContentRequest created with status: {}", request.status);
         props.on_submit.call(request);
         isSubmitting.set(false);
     };
@@ -236,12 +254,10 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
                                 option {
                                     value: STATUS_DRAFT,
-                                    if *status.read() == STATUS_DRAFT { "selected" },
                                     "Draft"
                                 }
                                 option {
                                     value: STATUS_PUBLISHED,
-                                    if *status.read() == STATUS_PUBLISHED { "selected" },
                                     "Published"
                                 }
                             }

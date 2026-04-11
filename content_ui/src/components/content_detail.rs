@@ -130,7 +130,6 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
 }
 
 /// Formats the content body for display (simple line breaks to paragraphs)
-#[allow(dead_code)]
 fn format_content_body(body: &str) -> String {
     body.split('\n')
         .filter(|line| !line.trim().is_empty())

@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct TagService {
     local_service: LocalTagService,
     remote_service: SupabaseTagService,
@@ -117,7 +116,6 @@ pub struct LocalTagService {
     next_content_tag_id: Arc<AtomicUsize>,
 }
 
-#[allow(dead_code)]
 impl LocalTagService {
     const TAGS_KEY: &'static str = "cms_tags";
     const CONTENT_TAGS_KEY: &'static str = "cms_content_tags";

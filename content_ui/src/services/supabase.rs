@@ -60,7 +60,12 @@ impl SupabaseService {
             url.query_pairs_mut().append_pair(key, value);
         }
 
-        Ok(url.to_string())
+        let mut url_string = url.to_string();
+        if url_string.ends_with('&') {
+            url_string.pop();
+        }
+
+        Ok(url_string)
     }
 
     /// Checks if Supabase service is properly configured
@@ -134,8 +139,8 @@ impl SupabaseService {
             );
         }
 
-        let url =
-            self.build_url_with_query(self.content_table_url(), &[("id", &id.to_string())])?;
+        let id_filter = format!("eq.{}", id);
+        let url = self.build_url_with_query(self.content_table_url(), &[("id", &id_filter)])?;
 
         let response = Request::get(&url)
             .headers(self.get_headers()?)
@@ -155,7 +160,6 @@ impl SupabaseService {
     }
 
     /// Fetches content by slug
-    #[allow(dead_code)]
     pub async fn get_content_by_slug(&self, slug: &str) -> Result<Option<Content>, String> {
         if !self.is_configured() {
             return Err(
@@ -163,7 +167,8 @@ impl SupabaseService {
             );
         }
 
-        let url = self.build_url_with_query(self.content_table_url(), &[("slug", slug)])?;
+        let slug_filter = format!("eq.{}", slug);
+        let url = self.build_url_with_query(self.content_table_url(), &[("slug", &slug_filter)])?;
 
         let response = Request::get(&url)
             .headers(self.get_headers()?)
@@ -231,8 +236,8 @@ impl SupabaseService {
             );
         }
 
-        let url =
-            self.build_url_with_query(self.content_table_url(), &[("id", &id.to_string())])?;
+        let id_filter = format!("eq.{}", id);
+        let url = self.build_url_with_query(self.content_table_url(), &[("id", &id_filter)])?;
         let body = serde_json::to_string(&content_request)
             .map_err(|e| format!("Failed to serialize request: {}", e))?;
 
@@ -261,7 +266,6 @@ impl SupabaseService {
     }
 
     /// Deletes a content item
-    #[allow(dead_code)]
     pub async fn delete_content(&self, id: i32) -> Result<(), String> {
         if !self.is_configured() {
             return Err(
@@ -269,8 +273,8 @@ impl SupabaseService {
             );
         }
 
-        let url =
-            self.build_url_with_query(self.content_table_url(), &[("id", &id.to_string())])?;
+        let id_filter = format!("eq.{}", id);
+        let url = self.build_url_with_query(self.content_table_url(), &[("id", &id_filter)])?;
 
         Request::delete(&url)
             .headers(self.get_headers()?)
@@ -282,7 +286,6 @@ impl SupabaseService {
     }
 
     /// Fetches content by status
-    #[allow(dead_code)]
     pub async fn get_content_by_status(&self, status: &str) -> Result<Vec<Content>, String> {
         if !self.is_configured() {
             return Err(

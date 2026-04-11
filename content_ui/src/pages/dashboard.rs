@@ -12,7 +12,7 @@ pub fn Dashboard() -> Element {
     let config = get_config();
     let content_service = ContentService::new();
 
-    let refresh_trigger: Signal<u64> = use_context::<Signal<u64>>();
+    // let refresh_trigger: Signal<u64> = use_context::<Signal<u64>>();
     let mut contents = use_resource(move || {
         let content_service = content_service.clone();
         async move { content_service.get_all_content().await }
@@ -39,18 +39,18 @@ pub fn Dashboard() -> Element {
         }
     });
 
-    use_effect(move || {
-        if let Some(result) = sync_result.read().as_ref() {
-            if result.is_ok() {
-                contents.restart();
-            }
-        }
-    });
+    // use_effect(move || {
+    //     if let Some(result) = sync_result.read().as_ref() {
+    //         if result.is_ok() {
+    //             contents.restart();
+    //         }
+    //     }
+    // });
 
-    use_effect(move || {
-        let _ = refresh_trigger();
-        contents.restart();
-    });
+    // use_effect(move || {
+    //     let _ = refresh_trigger();
+    //     contents.restart();
+    // });
 
     let handle_refresh = move |_| {
         contents.restart();

@@ -1,12 +1,25 @@
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Content status constants
 pub const STATUS_DRAFT: &str = "draft";
 pub const STATUS_PUBLISHED: &str = "published";
-#[allow(dead_code)]
 pub const STATUS_ARCHIVED: &str = "archived";
+
+/// Custom deserializer for optional datetime fields that handles empty strings
+fn deserialize_optional_datetime<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => DateTime::parse_from_rfc3339(s)
+            .map(|dt| Some(dt.with_timezone(&Utc)))
+            .map_err(serde::de::Error::custom),
+    }
+}
 
 /// Content model representing a CMS content item
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
@@ -19,11 +32,11 @@ pub struct Content {
     pub tags: Option<Vec<i32>>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    #[serde(deserialize_with = "deserialize_optional_datetime")]
     pub synced_at: Option<DateTime<Utc>>,
 }
 
 impl Content {
-    #[allow(dead_code)]
     /// Creates a new content item with default values
     pub fn new(title: String, slug: String, body: String) -> Self {
         Content {
@@ -40,7 +53,6 @@ impl Content {
     }
 
     /// Updates the content status
-    #[allow(dead_code)]
     pub fn with_status(mut self, status: String) -> Self {
         self.status = status;
         self
@@ -69,6 +81,7 @@ impl Content {
 /// Request structure for creating/updating content
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct ContentRequest {
+    pub id: Option<i32>,
     pub title: String,
     pub slug: String,
     pub body: String,
@@ -79,6 +92,7 @@ pub struct ContentRequest {
 impl From<Content> for ContentRequest {
     fn from(content: Content) -> Self {
         ContentRequest {
+            id: content.id,
             title: content.title,
             slug: content.slug,
             body: content.body,
