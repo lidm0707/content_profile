@@ -1,11 +1,9 @@
 use crate::config::ClientConfig;
-use crate::models::{Content, ContentRequest};
 use gloo_net::http::Headers;
 use gloo_net::http::Request;
-use tracing::{debug, error, info, trace, warn};
-use url::Url;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-const CONTENT_TABLE: &str = "content";
 const API_KEY_HEADER: &str = "apikey";
 const AUTHORIZATION_HEADER: &str = "Authorization";
 const CONTENT_TYPE_HEADER: &str = "Content-Type";
@@ -14,198 +12,159 @@ const RETURN_REPRESENTATION: &str = "return=representation";
 const BEARER_PREFIX: &str = "Bearer ";
 const APPLICATION_JSON: &str = "application/json";
 
-/// Supabase client for content management
-#[derive(Clone)]
-pub struct SupabaseClient {
-    config: ClientConfig,
+fn build_url(
+    config: &ClientConfig,
+    table: &str,
+    params: &[(&str, &str)],
+) -> Result<String, String> {
+    let base_url = config.rest_url();
+
+    // Build URL manually without using Url::set_query
+    let mut url_string = format!("{}/{}", base_url, table);
+
+    // Build query string manually with eq. prefix only for filter parameters
+    // (not for ordering, limit, offset, select, etc.)
+    if !params.is_empty() {
+        let query_string: String = params
+            .iter()
+            .filter(|(k, v)| !k.is_empty() && !v.is_empty())
+            .map(|(k, v)| {
+                // Don't add eq. prefix to ordering, limit, offset, select parameters
+                let no_eq_prefix = matches!(k.as_ref(), "order" | "limit" | "offset" | "select");
+                if no_eq_prefix {
+                    format!("{}={}", encode(k), encode(v))
+                } else {
+                    format!("{}=eq.{}", encode(k), encode(v))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("&");
+
+        if !query_string.is_empty() {
+            url_string = format!("{}?{}", url_string, query_string);
+        }
+    }
+    Ok(url_string)
 }
 
-impl SupabaseClient {
-    pub fn new(config: ClientConfig) -> Self {
-        info!("Initializing SupabaseClient...");
-        let base_url = config.build_rest_url();
-        info!("Supabase base URL: {}/{}", &base_url[..base_url.len().min(50)], CONTENT_TABLE);
-        Self { config }
-    }
+fn encode(s: &str) -> String {
+    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+}
 
-    fn build_url(&self, path: &str, params: &[(&str, &str)]) -> Result<String, String> {
-        let base_url = self.config.build_rest_url();
-        let mut url = Url::parse(&format!("{}/{}", base_url, path))
-            .map_err(|e| format!("Failed to parse URL: {}", e))?;
+fn build_headers(config: &ClientConfig, prefer_return: bool) -> Result<Headers, String> {
+    let headers = Headers::new();
+    let credential = get_credential(config);
 
-        for (key, value) in params {
-            url.query_pairs_mut().append_pair(key, value);
-        }
+    headers.set(API_KEY_HEADER, &config.anon_key);
 
-        Ok(url.to_string())
-    }
+    let auth_value = format!("{}{}", BEARER_PREFIX, credential);
+    headers.set(AUTHORIZATION_HEADER, &auth_value);
+    headers.set(CONTENT_TYPE_HEADER, APPLICATION_JSON);
 
-    fn build_headers(&self) -> Result<Headers, String> {
-        let headers = Headers::new();
-        let anon_key = self.config.anon_key();
-
-        headers.set(API_KEY_HEADER, anon_key);
-        headers.set(AUTHORIZATION_HEADER, &format!("{}{}", BEARER_PREFIX, anon_key));
-        headers.set(CONTENT_TYPE_HEADER, APPLICATION_JSON);
+    if prefer_return {
         headers.set(PREFER_HEADER, RETURN_REPRESENTATION);
-
-        trace!("Supabase API headers prepared successfully");
-        Ok(headers)
     }
 
-    pub async fn get_all_content(&self) -> Result<Vec<Content>, String> {
-        info!("Fetching all content from Supabase...");
+    Ok(headers)
+}
 
-        let url = self.build_url(CONTENT_TABLE, &[("order", "created_at.desc")])?;
-        debug!("Making GET request to: {}", &url[..url.len().min(50)]);
-
-        let response = Request::get(&url)
-            .headers(self.build_headers()?)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("Failed to send request to Supabase: {}", e);
-                format!("Failed to fetch content: {}", e)
-            })?;
-
-        debug!("Received response with status: {}", response.status());
-
-        response.json::<Vec<Content>>().await.map_err(|e| {
-            error!("Failed to parse response JSON: {}", e);
-            format!("Failed to parse response: {}", e)
-        })
+fn get_credential(config: &ClientConfig) -> &str {
+    if let Some(ref service_role_key) = config.service_role_key {
+        return service_role_key;
+    }
+    if let Some(ref jwt_token) = config.jwt_token {
+        return jwt_token;
     }
 
-    pub async fn get_content_by_id(&self, id: i32) -> Result<Option<Content>, String> {
-        debug!("Fetching content by ID: {}", id);
+    &config.anon_key
+}
 
-        let url = self.build_url(CONTENT_TABLE, &[("id", &id.to_string())])?;
+pub async fn get<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    params: &[(&str, &str)],
+) -> Result<Vec<T>, String> {
+    let url = build_url(config, table, params)?;
 
-        let response = Request::get(&url)
-            .headers(self.build_headers()?)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("Failed to fetch content by ID {}: {}", id, e);
-                format!("Failed to fetch content: {}", e)
-            })?;
+    Request::get(&url)
+        .headers(build_headers(config, false)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch data: {}", e))?
+        .json::<Vec<T>>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
 
-        let contents = response.json::<Vec<Content>>().await.map_err(|e| {
-            error!("Failed to parse response: {}", e);
-            format!("Failed to parse response: {}", e)
-        })?;
+pub async fn get_by_id<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    id: i32,
+) -> Result<Option<T>, String> {
+    let items = get(config, table, &[("id", &id.to_string())]).await?;
+    Ok(items.into_iter().next())
+}
 
-        Ok(contents.into_iter().next())
-    }
+pub async fn get_by<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    column: &str,
+    value: &str,
+) -> Result<Vec<T>, String> {
+    get(config, table, &[(column, value)]).await
+}
 
-    pub async fn get_content_by_slug(&self, slug: &str) -> Result<Option<Content>, String> {
-        let url = self.build_url(CONTENT_TABLE, &[("slug", slug)])?;
+pub async fn create<T: Serialize, R: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    data: &T,
+) -> Result<Vec<R>, String> {
+    let url = build_url(config, table, &[])?;
+    let body =
+        serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
-        let response = Request::get(&url)
-            .headers(self.build_headers()?)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch content: {}", e))?;
+    Request::post(&url)
+        .headers(build_headers(config, true)?)
+        .body(body)
+        .map_err(|e| format!("Failed to build request: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create data: {}", e))?
+        .json::<Vec<R>>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
 
-        let contents = response
-            .json::<Vec<Content>>()
-            .await
-            .map_err(|e| format!("Failed to parse response: {}", e))?;
+pub async fn update<T: Serialize, R: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    id: i32,
+    data: &T,
+) -> Result<Vec<R>, String> {
+    let url = build_url(config, table, &[("id", &id.to_string())])?;
+    let body =
+        serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
-        Ok(contents.into_iter().next())
-    }
+    Request::patch(&url)
+        .headers(build_headers(config, true)?)
+        .body(body)
+        .map_err(|e| format!("Failed to build request: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to update data: {}", e))?
+        .json::<Vec<R>>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
 
-    pub async fn create_content(&self, content_request: ContentRequest) -> Result<Content, String> {
-        debug!("Creating new content in Supabase");
+pub async fn delete(config: &ClientConfig, table: &str, id: i32) -> Result<(), String> {
+    let url = build_url(config, table, &[("id", &id.to_string())])?;
 
-        let url = self.build_url(CONTENT_TABLE, &[])?;
-        let body = serde_json::to_string(&content_request)
-            .map_err(|e| format!("Failed to serialize request: {}", e))?;
+    Request::delete(&url)
+        .headers(build_headers(config, false)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to delete data: {}", e))?;
 
-        let response = Request::post(&url)
-            .headers(self.build_headers()?)
-            .body(body)
-            .map_err(|e| format!("Failed to build: {}", e))?
-            .send()
-            .await
-            .map_err(|e| {
-                error!("Failed to create content: {}", e);
-                format!("Failed to create content: {}", e)
-            })?;
-
-        debug!("Create content response status: {}", response.status());
-
-        let contents = response.json::<Vec<Content>>().await.map_err(|e| {
-            error!("Failed to parse create response: {}", e);
-            format!("Failed to parse response: {}", e)
-        })?;
-
-        contents.into_iter().next().ok_or_else(|| {
-            error!("No content returned from create operation");
-            "No content returned".to_string()
-        })
-    }
-
-    pub async fn update_content(
-        &self,
-        id: i32,
-        content_request: ContentRequest,
-    ) -> Result<Content, String> {
-        debug!("Updating content ID: {}", id);
-
-        let url = self.build_url(CONTENT_TABLE, &[("id", &id.to_string())])?;
-        let body = serde_json::to_string(&content_request)
-            .map_err(|e| format!("Failed to serialize request: {}", e))?;
-
-        let response = Request::patch(&url)
-            .headers(self.build_headers()?)
-            .body(body)
-            .map_err(|e| format!("Failed to build: {}", e))?
-            .send()
-            .await
-            .map_err(|e| {
-                error!("Failed to update content {}: {}", id, e);
-                format!("Failed to update content: {}", e)
-            })?;
-
-        debug!("Update content response status: {}", response.status());
-
-        let contents = response.json::<Vec<Content>>().await.map_err(|e| {
-            error!("Failed to parse update response: {}", e);
-            format!("Failed to parse response: {}", e)
-        })?;
-
-        contents.into_iter().next().ok_or_else(|| {
-            error!("No content returned from update operation");
-            "No content returned".to_string()
-        })
-    }
-
-    pub async fn delete_content(&self, id: i32) -> Result<(), String> {
-        let url = self.build_url(CONTENT_TABLE, &[("id", &id.to_string())])?;
-
-        Request::delete(&url)
-            .headers(self.build_headers()?)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to delete content: {}", e))?;
-
-        Ok(())
-    }
-
-    pub async fn get_content_by_status(&self, status: &str) -> Result<Vec<Content>, String> {
-        let url = self.build_url(
-            CONTENT_TABLE,
-            &[("status", status), ("order", "created_at.desc")],
-        )?;
-
-        Request::get(&url)
-            .headers(self.build_headers()?)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch content: {}", e))?
-            .json::<Vec<Content>>()
-            .await
-            .map_err(|e| format!("Failed to parse response: {}", e))
-    }
+    Ok(())
 }

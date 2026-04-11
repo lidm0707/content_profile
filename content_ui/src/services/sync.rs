@@ -1,6 +1,7 @@
 use crate::models::{Content, ContentRequest};
 use crate::services::{LocalStorageService, SupabaseService};
 use std::time::Duration;
+use tracing::{info, trace, warn};
 
 /// Sync direction enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +53,34 @@ impl SyncService {
 
                 for content in unsynced {
                     let content_request: ContentRequest = content.clone().into();
-                    let _ = self.remote_service.create_content(content_request).await;
+                    if let Some(local_id) = content.id {
+                        trace!(
+                            "Pushing local content '{}' to remote (local_id: {})",
+                            content.title, local_id
+                        );
+                        match self.remote_service.create_content(content_request).await {
+                            Ok(remote_content) => {
+                                if let Some(remote_id) = remote_content.id {
+                                    info!(
+                                        "Successfully synced local content '{}' to remote_id: {}",
+                                        content.title, remote_id
+                                    );
+                                    let _ = self.local_service.mark_as_synced(local_id, remote_id);
+                                } else {
+                                    warn!(
+                                        "Remote content created but no ID returned for '{}'",
+                                        content.title
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to sync local content '{}' to remote: {}",
+                                    content.title, e
+                                );
+                            }
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -85,7 +113,34 @@ impl SyncService {
 
                 for content in unsynced {
                     let content_request: ContentRequest = content.clone().into();
-                    let _ = self.remote_service.create_content(content_request).await;
+                    if let Some(local_id) = content.id {
+                        trace!(
+                            "Pushing local content '{}' to remote (local_id: {})",
+                            content.title, local_id
+                        );
+                        match self.remote_service.create_content(content_request).await {
+                            Ok(remote_content) => {
+                                if let Some(remote_id) = remote_content.id {
+                                    info!(
+                                        "Successfully synced local content '{}' to remote_id: {}",
+                                        content.title, remote_id
+                                    );
+                                    let _ = self.local_service.mark_as_synced(local_id, remote_id);
+                                } else {
+                                    warn!(
+                                        "Remote content created but no ID returned for '{}'",
+                                        content.title
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to sync local content '{}' to remote: {}",
+                                    content.title, e
+                                );
+                            }
+                        }
+                    }
                 }
                 Ok(())
             }

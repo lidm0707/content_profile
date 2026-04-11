@@ -117,7 +117,6 @@ pub fn ContentEdit(id: i32) -> Element {
         error_message.set(None);
         success_message.set(None);
 
-        let id_for_spawn = id;
         let _current_content_for_spawn = current_content.read().clone();
         let navigate_for_spawn = navigate;
         let content_service_for_spawn = content_service.clone();
@@ -126,9 +125,9 @@ pub fn ContentEdit(id: i32) -> Element {
 
         // Spawn an async task to handle the submission
         async move {
-            let result = if is_editing {
+            let result = if request.id.is_some() {
                 content_service_for_spawn
-                    .update_content(id_for_spawn, request)
+                    .update_content(request.id.unwrap(), request)
                     .await
             } else {
                 content_service_for_spawn.create_content(request).await

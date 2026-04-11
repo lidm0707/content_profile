@@ -4388,6 +4388,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "url",
+ "web-sys",
 ]
 
 [[package]]

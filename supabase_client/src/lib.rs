@@ -1,13 +1,9 @@
-//! Supabase client library for content management
+//! Pure Supabase client functions for content management
 //!
-//! This library provides a client for interacting with Supabase's REST API
-//! to manage content items.
+//! This library provides pure async functions to interact with Supabase's REST API.
 
 pub mod client;
 pub mod config;
-pub mod models;
 
-pub use client::SupabaseClient;
-pub use config::{ClientConfig, ClientConfigBuilder};
-pub use models::status;
-pub use models::{Content, ContentRequest};
+pub use client::*;
+pub use config::{ClientConfig, client_config};

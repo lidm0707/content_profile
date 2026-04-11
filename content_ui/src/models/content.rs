@@ -78,9 +78,21 @@ impl Content {
     }
 }
 
+/// Custom serializer for id field - converts None to 0 for create operations
+fn serialize_id<S>(id: &Option<i32>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match id {
+        Some(value) => serializer.serialize_i32(*value),
+        None => serializer.serialize_i32(0),
+    }
+}
+
 /// Request structure for creating/updating content
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct ContentRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<i32>,
     pub title: String,
     pub slug: String,

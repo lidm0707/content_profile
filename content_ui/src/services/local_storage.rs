@@ -163,6 +163,27 @@ impl LocalStorageService {
             .collect())
     }
 
+    /// Marks content as synced by updating with remote ID and timestamp
+    pub fn mark_as_synced(&self, local_id: i32, remote_id: i32) -> Result<Content, String> {
+        let mut contents = self.contents.write().map_err(|e| e.to_string())?;
+
+        let index = contents
+            .iter()
+            .position(|c| c.id == Some(local_id))
+            .ok_or_else(|| format!("Content with local id {} not found", local_id))?;
+
+        let now = chrono::Utc::now();
+        contents[index].id = Some(remote_id);
+        contents[index].synced_at = Some(now);
+
+        let content = contents[index].clone();
+        drop(contents);
+
+        self.save_to_persistence();
+
+        Ok(content)
+    }
+
     /// Clears all local content
     pub fn clear_all(&self) -> Result<(), String> {
         let mut contents = self.contents.write().map_err(|e| e.to_string())?;

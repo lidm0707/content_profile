@@ -11,5 +11,6 @@ chrono = { workspace = true }
 gloo-net = { workspace = true }
 regex = { workspace = true }
 url = { workspace = true }
+web-sys = { workspace = true, features = ["console"] }
 tracing = { workspace = true }
 anyhow = { workspace = true }
