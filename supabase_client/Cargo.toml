@@ -1,0 +1,15 @@
+[package]
+name = "supabase_client"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+gloo-net = { workspace = true }
+regex = { workspace = true }
+url = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }

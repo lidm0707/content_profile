@@ -1,0 +1,42 @@
+[package]
+name = "content_ui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Dioxus dependencies
+dioxus = { workspace = true, features = ["router"] }
+
+# Shared dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+# Supabase client dependency
+supabase_client = { path = "../supabase_client" }
+
+# Web dependencies
+gloo-net = { workspace = true }
+web-sys = { workspace = true }
+gloo-timers = { workspace = true }
+lazy_static = { workspace = true }
+base64 = { workspace = true }
+log = { workspace = true }
+tracing-wasm = { workspace = true }
+console_log = { workspace = true }
+getrandom = { workspace = true, optional = true }
+url = { workspace = true }
+
+
+
+[features]
+default = ["web"]
+web = ["dioxus/web", "getrandom/js"]
+desktop = ["dioxus/desktop", "getrandom"]
+
+
+[build-dependencies]
+dotenvy = { workspace = true }
