@@ -1,4 +1,5 @@
 use crate::components::ContentList;
+use crate::contexts::UserContext;
 use crate::models::Content;
 use crate::routes::Route;
 use crate::services::{ContentService, SyncService};
@@ -9,6 +10,14 @@ use dioxus::prelude::*;
 /// Dashboard page component - main content management interface
 #[component]
 pub fn Dashboard() -> Element {
+    let navigator = use_navigator();
+
+    use_effect(move || {
+        if !UserContext::has_valid_saved_session() {
+            navigator.push(Route::Login {});
+        }
+    });
+
     let config = get_config();
     let content_service = ContentService::new();
 
@@ -21,7 +30,7 @@ pub fn Dashboard() -> Element {
     let mut error_message = use_signal(|| None::<String>);
     let mut contents_data = use_signal(Vec::<Content>::new);
     let mut sync_result = use_resource(move || async move {
-        let sync_service = SyncService::new();
+        let mut sync_service = SyncService::new();
         sync_service.sync_bidirectional().await
     });
 

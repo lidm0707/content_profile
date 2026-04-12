@@ -142,11 +142,11 @@ impl Config {
     }
 
     pub fn get_supabase_url(&self) -> Option<&String> {
-        todo!("Implement get_supabase_url accessor")
+        self.supabase_url.as_ref()
     }
 
     pub fn get_supabase_anon_key(&self) -> Option<&String> {
-        todo!("Implement get_supabase_anon_key accessor")
+        self.supabase_anon_key.as_ref()
     }
 }
 

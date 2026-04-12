@@ -1,7 +1,7 @@
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-
 /// User information from Supabase Auth
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct User {
     pub id: String,
     pub email: String,
@@ -12,7 +12,7 @@ pub struct User {
 }
 
 /// Session information from Supabase Auth
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct Session {
     pub access_token: String,
     pub refresh_token: String,
@@ -22,14 +22,14 @@ pub struct Session {
 }
 
 /// Login request payload
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
 /// Supabase Auth API response for login/signup
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct AuthResponse {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
@@ -39,7 +39,7 @@ pub struct AuthResponse {
 }
 
 /// Error response from Supabase Auth
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct AuthError {
     pub error: String,
     pub error_description: String,

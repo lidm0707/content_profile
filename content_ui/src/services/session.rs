@@ -15,45 +15,44 @@ impl SessionStorage {
 
     /// Saves the session to localStorage
     pub fn save_session(session: &Session) -> Result<(), String> {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                let stored = StoredSession {
-                    session: session.clone(),
-                };
-                let json = serde_json::to_string(&stored)
-                    .map_err(|e| format!("Failed to serialize session: {}", e))?;
-                storage
-                    .set_item(Self::SESSION_KEY, &json)
-                    .map_err(|e| format!("Failed to save session: {:?}", e))?;
-                return Ok(());
-            }
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage()
+        {
+            let stored = StoredSession {
+                session: session.clone(),
+            };
+            let json = serde_json::to_string(&stored)
+                .map_err(|e| format!("Failed to serialize session: {}", e))?;
+            storage
+                .set_item(Self::SESSION_KEY, &json)
+                .map_err(|e| format!("Failed to save session: {:?}", e))?;
+            return Ok(());
         }
         Err("Failed to access localStorage".to_string())
     }
 
     /// Loads the session from localStorage
     pub fn load_session() -> Result<Option<Session>, String> {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                if let Ok(Some(json)) = storage.get_item(Self::SESSION_KEY) {
-                    let stored: StoredSession = serde_json::from_str(&json)
-                        .map_err(|e| format!("Failed to deserialize session: {}", e))?;
-                    return Ok(Some(stored.session));
-                }
-            }
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage()
+            && let Ok(Some(json)) = storage.get_item(Self::SESSION_KEY)
+        {
+            let stored: StoredSession = serde_json::from_str(&json)
+                .map_err(|e| format!("Failed to deserialize session: {}", e))?;
+            return Ok(Some(stored.session));
         }
         Ok(None)
     }
 
     /// Clears the session from localStorage
     pub fn clear_session() -> Result<(), String> {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                storage
-                    .remove_item(Self::SESSION_KEY)
-                    .map_err(|e| format!("Failed to clear session: {:?}", e))?;
-                return Ok(());
-            }
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage()
+        {
+            storage
+                .remove_item(Self::SESSION_KEY)
+                .map_err(|e| format!("Failed to clear session: {:?}", e))?;
+            return Ok(());
         }
         Err("Failed to access localStorage".to_string())
     }

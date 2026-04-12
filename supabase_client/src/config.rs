@@ -41,16 +41,16 @@ impl ClientConfig {
             return Err("anon_key cannot be empty".to_string());
         }
 
-        if let Some(ref key) = self.service_role_key {
-            if key.is_empty() {
-                return Err("service_role_key cannot be empty if provided".to_string());
-            }
+        if let Some(ref key) = self.service_role_key
+            && key.is_empty()
+        {
+            return Err("service_role_key cannot be empty if provided".to_string());
         }
 
-        if let Some(ref token) = self.jwt_token {
-            if token.is_empty() {
-                return Err("jwt_token cannot be empty if provided".to_string());
-            }
+        if let Some(ref token) = self.jwt_token
+            && token.is_empty()
+        {
+            return Err("jwt_token cannot be empty if provided".to_string());
         }
 
         Ok(())

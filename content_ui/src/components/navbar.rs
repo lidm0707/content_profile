@@ -92,10 +92,9 @@ pub fn Navbar() -> Element {
                                 button {
                                     onclick: move |_| {
                                         let user_context = user_context.clone();
-                                        let access_token = session().as_ref().map(|s| s.access_token.clone());
                                         let navigator = use_navigator();
                                         spawn(async move {
-                                            let _ = user_context.logout(access_token).await;
+                                            let _ = user_context.logout().await;
                                         });
                                         session.write().take();
                                         navigator.push(Route::Login {});

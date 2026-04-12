@@ -33,7 +33,6 @@ pub fn Login() -> Element {
         let password_val = password.read().clone();
         let is_signup_val = *is_signup.read();
         let user_context = user_context.clone();
-        let navigator = navigator.clone();
 
         if email_val.is_empty() || password_val.is_empty() {
             *error.write() = Some("Email and password are required".to_string());

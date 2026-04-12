@@ -11,5 +11,5 @@ pub use content::ContentService;
 pub use local_storage::LocalStorageService;
 pub use session::SessionStorage;
 pub use supabase::SupabaseService;
-pub use sync::SyncService;
+pub use sync::{SyncDirection, SyncService};
 pub use tag::TagService;

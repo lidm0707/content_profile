@@ -30,7 +30,7 @@ fn build_url(
             .filter(|(k, v)| !k.is_empty() && !v.is_empty())
             .map(|(k, v)| {
                 // Don't add eq. prefix to ordering, limit, offset, select parameters
-                let no_eq_prefix = matches!(k.as_ref(), "order" | "limit" | "offset" | "select");
+                let no_eq_prefix = matches!(*k, "order" | "limit" | "offset" | "select");
                 if no_eq_prefix {
                     format!("{}={}", encode(k), encode(v))
                 } else {

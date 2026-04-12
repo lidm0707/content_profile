@@ -1,9 +1,14 @@
 use crate::models::{ContentTag, ContentTagRequest, Tag};
+use crate::utils::config::get_config;
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use supabase_client::{ClientConfig, create, delete, get};
 
-#[derive(Clone)]
+const TAGS_TABLE: &str = "tags";
+const CONTENT_TAGS_TABLE: &str = "content_tags";
+
+#[derive(Clone, PartialEq)]
 pub struct TagService {
     local_service: LocalTagService,
     remote_service: SupabaseTagService,
@@ -116,6 +121,15 @@ pub struct LocalTagService {
     next_content_tag_id: Arc<AtomicUsize>,
 }
 
+impl PartialEq for LocalTagService {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.tags, &other.tags)
+            && Arc::ptr_eq(&self.content_tags, &other.content_tags)
+            && Arc::ptr_eq(&self.next_tag_id, &other.next_tag_id)
+            && Arc::ptr_eq(&self.next_content_tag_id, &other.next_content_tag_id)
+    }
+}
+
 impl LocalTagService {
     const TAGS_KEY: &'static str = "cms_tags";
     const CONTENT_TAGS_KEY: &'static str = "cms_content_tags";
@@ -202,53 +216,53 @@ impl LocalTagService {
     }
 
     fn save_to_persistence(&self) {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                let tags = self.tags.read().unwrap();
-                if let Ok(json) = serde_json::to_string(&*tags) {
-                    let _ = storage.set_item(Self::TAGS_KEY, &json);
-                }
-
-                let content_tags = self.content_tags.read().unwrap();
-                if let Ok(json) = serde_json::to_string(&*content_tags) {
-                    let _ = storage.set_item(Self::CONTENT_TAGS_KEY, &json);
-                }
-
-                let next_tag_id = self.next_tag_id.load(Ordering::SeqCst);
-                let _ = storage.set_item(Self::NEXT_TAG_ID_KEY, &next_tag_id.to_string());
-
-                let next_content_tag_id = self.next_content_tag_id.load(Ordering::SeqCst);
-                let _ = storage.set_item(
-                    Self::NEXT_CONTENT_TAG_ID_KEY,
-                    &next_content_tag_id.to_string(),
-                );
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage()
+        {
+            let tags = self.tags.read().unwrap();
+            if let Ok(json) = serde_json::to_string(&*tags) {
+                let _ = storage.set_item(Self::TAGS_KEY, &json);
             }
+
+            let content_tags = self.content_tags.read().unwrap();
+            if let Ok(json) = serde_json::to_string(&*content_tags) {
+                let _ = storage.set_item(Self::CONTENT_TAGS_KEY, &json);
+            }
+
+            let next_tag_id = self.next_tag_id.load(Ordering::SeqCst);
+            let _ = storage.set_item(Self::NEXT_TAG_ID_KEY, &next_tag_id.to_string());
+
+            let next_content_tag_id = self.next_content_tag_id.load(Ordering::SeqCst);
+            let _ = storage.set_item(
+                Self::NEXT_CONTENT_TAG_ID_KEY,
+                &next_content_tag_id.to_string(),
+            );
         }
     }
 
     fn load_from_persistence(&self) {
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
-                if let Ok(Some(json)) = storage.get_item(Self::TAGS_KEY) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<Tag>>(&json) {
-                        let mut tags = self.tags.write().unwrap();
-                        *tags = loaded;
-                        if let Some(max_id) = tags.iter().filter_map(|t| t.id).max() {
-                            self.next_tag_id
-                                .store(max_id as usize + 1, Ordering::SeqCst);
-                        }
-                    }
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage()
+        {
+            if let Ok(Some(json)) = storage.get_item(Self::TAGS_KEY)
+                && let Ok(loaded) = serde_json::from_str::<Vec<Tag>>(&json)
+            {
+                let mut tags = self.tags.write().unwrap();
+                *tags = loaded;
+                if let Some(max_id) = tags.iter().filter_map(|t| t.id).max() {
+                    self.next_tag_id
+                        .store(max_id as usize + 1, Ordering::SeqCst);
                 }
+            }
 
-                if let Ok(Some(json)) = storage.get_item(Self::CONTENT_TAGS_KEY) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<ContentTag>>(&json) {
-                        let mut content_tags = self.content_tags.write().unwrap();
-                        *content_tags = loaded;
-                        if let Some(max_id) = content_tags.iter().filter_map(|ct| ct.id).max() {
-                            self.next_content_tag_id
-                                .store(max_id as usize + 1, Ordering::SeqCst);
-                        }
-                    }
+            if let Ok(Some(json)) = storage.get_item(Self::CONTENT_TAGS_KEY)
+                && let Ok(loaded) = serde_json::from_str::<Vec<ContentTag>>(&json)
+            {
+                let mut content_tags = self.content_tags.write().unwrap();
+                *content_tags = loaded;
+                if let Some(max_id) = content_tags.iter().filter_map(|ct| ct.id).max() {
+                    self.next_content_tag_id
+                        .store(max_id as usize + 1, Ordering::SeqCst);
                 }
             }
         }
@@ -397,7 +411,7 @@ impl LocalTagService {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct SupabaseTagService;
 
 impl SupabaseTagService {
@@ -406,26 +420,75 @@ impl SupabaseTagService {
     }
 
     pub async fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        todo!("Supabase integration not implemented yet")
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        get::<Tag>(&config, TAGS_TABLE, &[]).await
     }
 
-    pub async fn get_tags_for_content(&self, _content_id: i32) -> Result<Vec<Tag>, String> {
-        todo!("Supabase integration not implemented yet")
+    pub async fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let content_tags: Vec<ContentTag> = get(
+            &config,
+            CONTENT_TAGS_TABLE,
+            &[("content_id", &content_id.to_string())],
+        )
+        .await?;
+
+        let tag_ids: Vec<i32> = content_tags.iter().map(|ct| ct.tag_id).collect();
+
+        let all_tags: Vec<Tag> = self.get_all_tags().await?;
+
+        Ok(all_tags
+            .into_iter()
+            .filter(|tag| tag.id.is_some_and(|id| tag_ids.contains(&id)))
+            .collect())
     }
 
     pub async fn add_tag_to_content(
         &self,
-        _request: ContentTagRequest,
+        request: ContentTagRequest,
     ) -> Result<ContentTag, String> {
-        todo!("Supabase integration not implemented yet")
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let result =
+            create::<ContentTagRequest, ContentTag>(&config, CONTENT_TAGS_TABLE, &request).await?;
+        result
+            .into_iter()
+            .next()
+            .ok_or_else(|| "Failed to create content_tag".to_string())
     }
 
     pub async fn remove_tag_from_content(
         &self,
-        _content_id: i32,
-        _tag_id: i32,
+        content_id: i32,
+        tag_id: i32,
     ) -> Result<(), String> {
-        todo!("Supabase integration not implemented yet")
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let content_tags: Vec<ContentTag> = get(
+            &config,
+            CONTENT_TAGS_TABLE,
+            &[
+                ("content_id", &content_id.to_string()),
+                ("tag_id", &tag_id.to_string()),
+            ],
+        )
+        .await?;
+
+        if let Some(content_tag) = content_tags.into_iter().next() {
+            if let Some(id) = content_tag.id {
+                delete(&config, CONTENT_TAGS_TABLE, id).await
+            } else {
+                Err("ContentTag has no ID".to_string())
+            }
+        } else {
+            Err("ContentTag not found".to_string())
+        }
     }
 }
 
@@ -435,8 +498,18 @@ impl Default for LocalTagService {
     }
 }
 
-impl Default for SupabaseTagService {
-    fn default() -> Self {
-        Self::new()
-    }
+fn build_client_config(app_config: &crate::utils::config::Config) -> Result<ClientConfig, String> {
+    let supabase_url = app_config
+        .supabase_url
+        .as_ref()
+        .ok_or_else(|| "SUPABASE_URL must be set".to_string())?;
+    let supabase_anon_key = app_config
+        .supabase_anon_key
+        .as_ref()
+        .ok_or_else(|| "SUPABASE_ANON_KEY must be set".to_string())?;
+
+    Ok(supabase_client::client_config(
+        supabase_url.clone(),
+        supabase_anon_key.clone(),
+    ))
 }

@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::contexts::UserContext;
+use crate::contexts::{ContentContext, SyncContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/tailwind.css");
@@ -15,6 +15,18 @@ pub fn App() -> Element {
     // Create UserContext
     let user_context = UserContext::new();
     use_context_provider(move || user_context.clone());
+
+    // Create ContentContext
+    let content_context = ContentContext::new();
+    use_context_provider(move || content_context.clone());
+
+    // Create TagContext
+    let tag_context = TagContext::new();
+    use_context_provider(move || tag_context.clone());
+
+    // Create SyncContext
+    let sync_context = SyncContext::new();
+    use_context_provider(move || sync_context.clone());
 
     // Load saved session and create session signal
     let session_signal = use_signal(|| {

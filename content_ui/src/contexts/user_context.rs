@@ -1,4 +1,4 @@
-use crate::models::{LoginRequest, Session, User};
+use crate::models::{LoginRequest, Session};
 use crate::services::{AuthService, SessionStorage};
 use std::sync::Arc;
 
@@ -38,18 +38,26 @@ impl UserContext {
     }
 
     /// Logs out the current user
-    pub async fn logout(&self, _access_token: Option<String>) -> Result<(), String> {
-        todo!("Implement logout functionality")
+    pub async fn logout(&self) -> Result<(), String> {
+        if let Ok(Some(session)) = Self::load_saved_session() {
+            let _ = self.auth_service.logout(&session.access_token).await;
+        }
+        SessionStorage::clear_session()
     }
 
     /// Refreshes the access token
-    pub async fn refresh_token(&self, _refresh_token: &str) -> Result<Session, String> {
-        todo!("Implement token refresh functionality")
+    pub async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<crate::models::Session, String> {
+        let session = self.auth_service.refresh_token(refresh_token).await?;
+        SessionStorage::save_session(&session)?;
+        Ok(session)
     }
 
     /// Gets the current user from the server
-    pub async fn get_user(&self, _access_token: &str) -> Result<User, String> {
-        todo!("Implement get user functionality")
+    pub async fn get_user(&self, access_token: &str) -> Result<crate::models::User, String> {
+        self.auth_service.get_user(access_token).await
     }
 
     /// Loads the saved session from storage
@@ -64,7 +72,12 @@ impl UserContext {
 
     /// Checks if a saved session is valid
     pub fn has_valid_saved_session() -> bool {
-        todo!("Implement session validation")
+        if let Ok(Some(session)) = Self::load_saved_session() {
+            let now = chrono::Utc::now().timestamp();
+            now < session.expires_at
+        } else {
+            false
+        }
     }
 
     /// Checks if authentication (Supabase) is configured

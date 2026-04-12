@@ -28,7 +28,7 @@ impl SyncService {
     }
 
     /// Syncs content from remote to local (pull)
-    pub async fn sync_pull(&self) -> Result<(), String> {
+    pub async fn sync_pull(&mut self) -> Result<(), String> {
         match self.remote_service.get_all_content().await {
             Ok(remote_contents) => {
                 self.local_service
@@ -41,7 +41,7 @@ impl SyncService {
     }
 
     /// Syncs content from local to remote (push)
-    pub async fn sync_push(&self) -> Result<(), String> {
+    pub async fn sync_push(&mut self) -> Result<(), String> {
         match self.remote_service.get_all_content().await {
             Ok(remote_contents) => {
                 let remote_ids: Vec<i32> = remote_contents.iter().filter_map(|c| c.id).collect();
@@ -89,7 +89,7 @@ impl SyncService {
     }
 
     /// Syncs content bidirectionally
-    pub async fn sync_bidirectional(&self) -> Result<(), String> {
+    pub async fn sync_bidirectional(&mut self) -> Result<(), String> {
         match self.remote_service.get_all_content().await {
             Ok(remote_contents) => {
                 let remote_ids: Vec<i32> = remote_contents.iter().filter_map(|c| c.id).collect();

@@ -50,8 +50,10 @@ impl AuthService {
         Ok(headers)
     }
 
-    fn get_auth_headers(&self, _access_token: &str) -> Result<Headers, String> {
-        unimplemented!("get_auth_headers not implemented")
+    fn get_auth_headers(&self, access_token: &str) -> Result<Headers, String> {
+        let headers = self.get_headers()?;
+        headers.set("Authorization", &format!("Bearer {}", access_token));
+        Ok(headers)
     }
 
     pub async fn login(&self, request: LoginRequest) -> Result<Session, String> {
@@ -132,16 +134,110 @@ impl AuthService {
         auth_response.into_session()
     }
 
-    pub async fn logout(&self, _access_token: &str) -> Result<(), String> {
-        unimplemented!("logout not implemented")
+    pub async fn logout(&self, access_token: &str) -> Result<(), String> {
+        if !self.is_configured() {
+            return Err(
+                "Authentication is not configured. Please set up Supabase credentials.".to_string(),
+            );
+        }
+
+        let url = format!("{}/logout", self.auth_url());
+        let headers = self.get_auth_headers(access_token)?;
+
+        let response = Request::post(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send logout request: {}", e))?;
+
+        if !response.ok() {
+            let error: AuthError = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse error response: {}", e))?;
+            return Err(format!(
+                "Logout failed: {} - {}",
+                error.error, error.error_description
+            ));
+        }
+
+        Ok(())
     }
 
-    pub async fn get_user(&self, _access_token: &str) -> Result<User, String> {
-        unimplemented!("get_user not implemented")
+    pub async fn get_user(&self, access_token: &str) -> Result<User, String> {
+        if !self.is_configured() {
+            return Err(
+                "Authentication is not configured. Please set up Supabase credentials.".to_string(),
+            );
+        }
+
+        let url = format!("{}/user", self.auth_url());
+        let headers = self.get_auth_headers(access_token)?;
+
+        let response = Request::get(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send get user request: {}", e))?;
+
+        if !response.ok() {
+            let error: AuthError = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse error response: {}", e))?;
+            return Err(format!(
+                "Get user failed: {} - {}",
+                error.error, error.error_description
+            ));
+        }
+
+        let user: User = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse user response: {}", e))?;
+
+        Ok(user)
     }
 
-    pub async fn refresh_token(&self, _refresh_token: &str) -> Result<Session, String> {
-        unimplemented!("refresh_token not implemented")
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<Session, String> {
+        if !self.is_configured() {
+            return Err(
+                "Authentication is not configured. Please set up Supabase credentials.".to_string(),
+            );
+        }
+
+        let url = format!("{}/token?grant_type=refresh_token", self.auth_url());
+        let body = serde_json::json!({ "refresh_token": refresh_token });
+        let body_str = serde_json::to_string(&body)
+            .map_err(|e| format!("Failed to serialize request: {}", e))?;
+
+        let response = Request::post(&url)
+            .headers(self.get_headers()?)
+            .body(body_str)
+            .map_err(|e| format!("Failed to build: {}", e))?
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send refresh token request: {}", e))?;
+
+        if !response.ok() {
+            let error: AuthError = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse error response: {}", e))?;
+            return Err(format!(
+                "Refresh token failed: {} - {}",
+                error.error, error.error_description
+            ));
+        }
+
+        let auth_response: AuthResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse auth response: {}", e))?;
+
+        auth_response
+            .into_session()
+            .map_err(|e| format!("Failed to into session: {}", e))
     }
 }
 

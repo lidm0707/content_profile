@@ -5,8 +5,27 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
+# Dioxus framework
+dioxus = { version = "0.7.1", features = ["router", "web"] }
+dioxus-logger = "0.5"
+
+# Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# Date/time handling
 chrono = { workspace = true }
-tracing = { workspace = true }
+
+# Error handling
 anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Supabase client for content management
+supabase_client = { path = "../supabase_client" }
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]

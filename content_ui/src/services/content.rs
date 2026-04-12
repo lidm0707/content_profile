@@ -86,7 +86,10 @@ impl ContentService {
     }
 
     /// Creates a new content item
-    pub async fn create_content(&self, content_request: ContentRequest) -> Result<Content, String> {
+    pub async fn create_content(
+        &mut self,
+        content_request: ContentRequest,
+    ) -> Result<Content, String> {
         debug!(
             "Creating content '{}' (mode: {:?})",
             content_request.title, self.mode
@@ -105,7 +108,7 @@ impl ContentService {
 
     /// Updates an existing content item
     pub async fn update_content(
-        &self,
+        &mut self,
         id: i32,
         content_request: ContentRequest,
     ) -> Result<Content, String> {
@@ -125,7 +128,7 @@ impl ContentService {
     }
 
     /// Deletes a content item
-    pub async fn delete_content(&self, id: i32) -> Result<(), String> {
+    pub async fn delete_content(&mut self, id: i32) -> Result<(), String> {
         match self.mode {
             AppMode::Office => self.local_service.delete_content(id),
             AppMode::Supabase => self.remote_service.delete_content(id).await,

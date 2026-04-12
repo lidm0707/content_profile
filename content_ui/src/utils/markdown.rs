@@ -79,11 +79,10 @@ pub fn parse_tag_frontmatter(content: &str) -> Vec<String> {
             continue;
         }
 
-        if in_tags_section {
-            if let Some(tag_name) = parse_tag_line(line) {
+        if in_tags_section
+            && let Some(tag_name) = parse_tag_line(line) {
                 tags.push(tag_name);
             }
-        }
     }
 
     tags
