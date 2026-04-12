@@ -340,10 +340,20 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
 }
 
 /// Formats the content body for display (simple line breaks to paragraphs)
+/// Escapes HTML special characters to prevent XSS attacks
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
+/// Formats content body by converting newlines to paragraphs and escaping HTML
 fn format_content_body(body: &str) -> String {
     body.split('\n')
         .filter(|line| !line.trim().is_empty())
-        .map(|line| format!("<p>{}</p>", line))
+        .map(|line| format!("<p>{}</p>", escape_html(line)))
         .collect::<Vec<String>>()
         .join("")
 }
