@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 
-use crate::components::MainLayout;
 use crate::contexts::{ContentContext, SyncContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
