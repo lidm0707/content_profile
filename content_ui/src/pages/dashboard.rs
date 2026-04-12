@@ -330,13 +330,6 @@ pub fn Dashboard() -> Element {
                         }
                     }
                 }
-            }
-
-            // Sync status cards
-            div {
-                class: "grid grid-cols-1 gap-5 sm:grid-cols-2 mb-8",
-
-                // Local only content card
                 div {
                     class: "bg-white overflow-hidden shadow rounded-lg",
 
@@ -354,8 +347,6 @@ pub fn Dashboard() -> Element {
                         }
                     }
                 }
-
-                // Synced content card
                 div {
                     class: "bg-white overflow-hidden shadow rounded-lg",
 
@@ -374,6 +365,8 @@ pub fn Dashboard() -> Element {
                     }
                 }
             }
+
+
         }
 
         // Content list or loading/error state

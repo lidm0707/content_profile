@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+
 
 const SUPABASE_URL: &str = env!("SUPABASE_URL");
 const SUPABASE_ANON_KEY: &str = env!("SUPABASE_ANON_KEY");
@@ -236,22 +236,15 @@ impl SessionStorage {
     }
 }
 
-impl Clone for UserContext {
-    fn clone(&self) -> Self {
-        Self {
-            auth_service: Arc::clone(&self.auth_service),
-        }
-    }
-}
-
+#[derive(Clone)]
 pub struct UserContext {
-    auth_service: Arc<AuthService>,
+    auth_service: AuthService,
 }
 
 impl UserContext {
     pub fn new() -> Self {
         Self {
-            auth_service: Arc::new(AuthService::new()),
+            auth_service: AuthService::new(),
         }
     }
 

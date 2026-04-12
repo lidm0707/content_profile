@@ -1,18 +1,17 @@
 use crate::models::{LoginRequest, Session};
 use crate::services::{AuthService, SessionStorage};
-use std::sync::Arc;
 
 /// User context for managing authentication state across the app
 #[derive(Clone)]
 pub struct UserContext {
-    auth_service: Arc<AuthService>,
+    auth_service: AuthService,
 }
 
 impl UserContext {
     /// Creates a new UserContext
     pub fn new() -> Self {
         UserContext {
-            auth_service: Arc::new(AuthService::new()),
+            auth_service: AuthService::new(),
         }
     }
 
