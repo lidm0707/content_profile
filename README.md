@@ -5,6 +5,7 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 ## 🚀 Features
 
 - **Content Management**: Create, read, update, and delete content items
+- **Tag System**: Organize content with flexible tags and filter by tag
 - **Rich User Interface**: Modern, responsive design built with Tailwind CSS
 - **Real-time Data**: Seamless integration with Supabase database
 - **Status Tracking**: Manage content with draft, published, and archived statuses
@@ -37,7 +38,9 @@ content_profile/
 │  ├─ routes.rs                # Route definitions
 │  ├─ models/                  # Data models
 │  │  ├─ mod.rs               # Models module
-│  │  └─ content.rs           # Content model and requests
+│  │  ├─ content.rs           # Content model and requests
+│  │  ├─ tag.rs               # Tag model and requests
+│  │  └─ content_tag.rs       # Content-tag relationship model
 │  ├─ components/              # Reusable components
 │  │  ├─ mod.rs               # Components module
 │  │  ├─ navbar.rs            # Navigation bar
@@ -48,10 +51,25 @@ content_profile/
 │  │  ├─ mod.rs               # Pages module
 │  │  ├─ home.rs              # Home/landing page
 │  │  ├─ dashboard.rs         # Content management dashboard
-│  │  └─ content_edit.rs      # Content edit/create page
+│  │  ├─ content_edit.rs      # Content edit/create page
+│  │  ├─ content_list.rs      # Content list page with tag filtering
+│  │  ├─ login.rs             # Login page
+│  │  ├─ tags_edit.rs          # Tag creation/editing page
+│  │  └─ tags_list.rs          # Tags list page
 │  ├─ services/                # External services
 │  │  ├─ mod.rs               # Services module
-│  │  └─ supabase.rs          # Supabase client and operations
+│  │  ├─ supabase.rs          # Supabase client and operations
+│  │  ├─ auth.rs              # Authentication service
+│  │  ├─ content.rs           # Content service
+│  │  ├─ tag.rs               # Tag service
+│  │  ├─ sync.rs              # Sync service
+│  │  ├─ local_storage.rs     # Local storage service
+│  │  └─ session.rs           # Session storage service
+│  ├─ contexts/               # Reactive state contexts
+│  │  ├─ mod.rs               # Contexts module
+│  │  ├─ user_context.rs      # User authentication context
+│  │  ├─ content_context.rs   # Content management context
+│  │  └─ tag_context.rs       # Tag management context
 │  └─ utils/                   # Utility functions
 │     ├─ mod.rs               # Utils module
 │     └─ config.rs            # Configuration management
@@ -228,9 +246,17 @@ The landing page provides an overview of the CMS and navigation to the dashboard
 ### 2. Dashboard
 
 The main content management interface displays:
-- **Statistics**: Total content, published items, and drafts
+- **Statistics**: Total content, published items, drafts, local only, and synced items
+- **Tags**: Display all available tags as clickable badges
 - **Content List**: Grid view of all content items with status indicators
-- **Actions**: Create new content, refresh list, edit existing content
+- **Actions**: Create new content, refresh list, sync with server, edit existing content
+
+#### Using Tags
+
+- Click on any tag in the dashboard to filter content by that tag
+- The content list page will display only content tagged with the selected tag
+- Click "Dashboard" button to return to full content list
+- Navigate to Tags List to create or manage tags
 
 ### 3. Creating Content
 
@@ -241,6 +267,7 @@ The main content management interface displays:
    - **Slug**: URL-friendly identifier (can be manually edited)
    - **Status**: Choose between Draft or Published
    - **Body**: Content text
+   - **Tags**: Add tags to organize your content
 4. Click "Create Content"
 
 ### 4. Editing Content
@@ -250,7 +277,15 @@ The main content management interface displays:
 3. Modify the content as needed
 4. Click "Update Content"
 
-### 5. Deleting Content
+### 5. Managing Tags
+
+1. Navigate to Dashboard
+2. Click on a tag to view content filtered by that tag
+3. Navigate to Tags List from the navigation
+4. Create new tags or edit existing tags
+5. Add or remove tags from content items
+
+### 6. Deleting Content
 
 Currently, deletion is handled through the Supabase dashboard. Future versions will include in-app deletion.
 
@@ -460,12 +495,21 @@ For issues, questions, or contributions:
 
 ## 🗺 Roadmap
 
+### Recently Completed ✅
+
+- [x] User authentication and authorization
+- [x] Content categories/tags
+- [x] Tag-based content filtering
+- [x] Dashboard with statistics
+- [x] Sync functionality (local/offline mode)
+- [x] Content CRUD operations
+- [x] Tag CRUD operations
+- [x] Reactive state management with contexts
+
 ### Planned Features
 
-- [ ] User authentication and authorization
 - [ ] Image upload functionality
 - [ ] Rich text editor integration
-- [ ] Content categories/tags
 - [ ] Search functionality
 - [ ] Content versioning
 - [ ] Dark mode support

@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::components::MainLayout;
 // Import page components for use in routes
 use crate::pages::ContentEdit;
+use crate::pages::ContentList;
 use crate::pages::Dashboard;
 use crate::pages::Home;
 use crate::pages::Login;
@@ -35,4 +36,8 @@ pub enum Route {
     // Tags list page - displays all tags with management options
     #[route("/tags")]
     TagsList {},
+
+    // Content list page - displays content filtered by tag (empty string = all content)
+    #[route("/content/list/:tag")]
+    ContentList { tag: String },
 }

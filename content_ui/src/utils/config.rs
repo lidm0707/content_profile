@@ -6,7 +6,7 @@ pub enum AppMode {
     Supabase,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub mode: AppMode,
     pub supabase_url: Option<String>,
