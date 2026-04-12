@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::contexts::{ContentContext, SyncContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
-const MAIN_CSS: Asset = asset!("/assets/tailwind.css");
+const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
 /// Root application component that sets up the router and global providers
 #[component]
@@ -48,7 +48,7 @@ pub fn App() -> Element {
     rsx! {
         // Document head elements
         document::Link { rel: "icon", href: FAVICON }
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        document::Stylesheet { href: TAILWIND_CSS }
 
         // Main application router
         Router::<crate::routes::Route> {}

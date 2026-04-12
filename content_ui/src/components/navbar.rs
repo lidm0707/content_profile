@@ -12,7 +12,7 @@ pub fn Navbar() -> Element {
     rsx! {
         // Fixed navbar at the top
         nav {
-            class: "bg-white shadow-md fixed w-full top-0 z-50 h-16",
+            class: "bg-gray-100 border-b-2 border-gray-200 shadow-md fixed w-full top-0 z-50 h-16",
 
             div {
                 class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
