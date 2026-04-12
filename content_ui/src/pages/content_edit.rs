@@ -120,7 +120,7 @@ pub fn ContentEdit(id: i32) -> Element {
         let _current_content_for_spawn = current_content.read().clone();
         let navigate_for_spawn = navigate;
         let mut content_service_for_spawn = content_service.clone();
-        let tag_service_for_spawn = tag_service.clone();
+        let mut tag_service_for_spawn = tag_service.clone();
         let request_tags = request.tags.clone().unwrap_or_default();
 
         // Spawn an async task to handle the submission

@@ -21,7 +21,7 @@ fn TagButton(props: TagButtonProps) -> Element {
             onclick: move |_| {
                 let content_id = props.content_id;
                 let tag_id = props.tag.id.unwrap_or(0);
-                let tag_context = tag_context.clone();
+                let mut tag_context = tag_context.clone();
                 spawn(async move {
                     let _ = tag_context.add_tag_to_content(
                         crate::models::ContentTagRequest {

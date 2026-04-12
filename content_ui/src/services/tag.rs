@@ -1,8 +1,6 @@
 use crate::models::{ContentTag, ContentTagRequest, Tag};
 use crate::utils::config::get_config;
 use dioxus::prelude::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
 use supabase_client::{ClientConfig, create, delete, get};
 
 const TAGS_TABLE: &str = "tags";
@@ -23,54 +21,31 @@ impl TagService {
     }
 
     pub async fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            return self.remote_service.get_all_tags().await;
-        }
-        #[cfg(target_arch = "wasm32")]
         {
             return self.local_service.get_all_tags();
         }
     }
 
     pub async fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            return self.remote_service.get_tags_for_content(content_id).await;
-        }
-        #[cfg(target_arch = "wasm32")]
         {
             return self.local_service.get_tags_for_content(content_id);
         }
     }
 
     pub async fn add_tag_to_content(
-        &self,
+        &mut self,
         request: ContentTagRequest,
     ) -> Result<ContentTag, String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            return self.remote_service.add_tag_to_content(request).await;
-        }
-        #[cfg(target_arch = "wasm32")]
         {
             return self.local_service.add_tag_to_content(request);
         }
     }
 
     pub async fn remove_tag_from_content(
-        &self,
+        &mut self,
         content_id: i32,
         tag_id: i32,
     ) -> Result<(), String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            return self
-                .remote_service
-                .remove_tag_from_content(content_id, tag_id)
-                .await;
-        }
-        #[cfg(target_arch = "wasm32")]
         {
             return self
                 .local_service
@@ -79,12 +54,15 @@ impl TagService {
     }
 
     pub async fn update_content_tags(
-        &self,
+        &mut self,
         content_id: i32,
         tag_ids: Vec<i32>,
     ) -> Result<(), String> {
         let current_tags = self.get_tags_for_content(content_id).await?;
-        let current_tag_ids: Vec<i32> = current_tags.iter().map(|t| t.id.unwrap()).collect();
+        let current_tag_ids: Vec<i32> = current_tags
+            .iter()
+            .map(|t| t.id.unwrap_or_default())
+            .collect();
 
         for tag_id in &tag_ids {
             if !current_tag_ids.contains(tag_id) {
@@ -113,21 +91,12 @@ impl Default for TagService {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Props)]
 pub struct LocalTagService {
-    tags: Arc<RwLock<Vec<Tag>>>,
-    content_tags: Arc<RwLock<Vec<ContentTag>>>,
-    next_tag_id: Arc<AtomicUsize>,
-    next_content_tag_id: Arc<AtomicUsize>,
-}
-
-impl PartialEq for LocalTagService {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.tags, &other.tags)
-            && Arc::ptr_eq(&self.content_tags, &other.content_tags)
-            && Arc::ptr_eq(&self.next_tag_id, &other.next_tag_id)
-            && Arc::ptr_eq(&self.next_content_tag_id, &other.next_content_tag_id)
-    }
+    tags: Signal<Vec<Tag>>,
+    content_tags: Signal<Vec<ContentTag>>,
+    next_tag_id: Signal<usize>,
+    next_content_tag_id: Signal<usize>,
 }
 
 impl LocalTagService {
@@ -137,11 +106,11 @@ impl LocalTagService {
     const NEXT_CONTENT_TAG_ID_KEY: &'static str = "cms_next_content_tag_id";
 
     pub fn new() -> Self {
-        let service = LocalTagService {
-            tags: Arc::new(RwLock::new(Vec::new())),
-            content_tags: Arc::new(RwLock::new(Vec::new())),
-            next_tag_id: Arc::new(AtomicUsize::new(1)),
-            next_content_tag_id: Arc::new(AtomicUsize::new(1)),
+        let mut service = LocalTagService {
+            tags: Signal::new(Vec::new()),
+            content_tags: Signal::new(Vec::new()),
+            next_tag_id: Signal::new(1),
+            next_content_tag_id: Signal::new(1),
         };
         service.load_from_persistence();
         service.initialize_default_tags();
@@ -149,13 +118,13 @@ impl LocalTagService {
     }
 
     pub fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        let tags = self.tags.read().map_err(|e| e.to_string())?;
+        let tags = self.tags.read();
         Ok(tags.clone())
     }
 
     pub fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
-        let content_tags = self.content_tags.read().map_err(|e| e.to_string())?;
-        let tags = self.tags.read().map_err(|e| e.to_string())?;
+        let content_tags = self.content_tags.read();
+        let tags = self.tags.read();
 
         let tag_ids: Vec<i32> = content_tags
             .iter()
@@ -169,8 +138,8 @@ impl LocalTagService {
             .collect())
     }
 
-    pub fn add_tag_to_content(&self, request: ContentTagRequest) -> Result<ContentTag, String> {
-        let content_tags = self.content_tags.read().map_err(|e| e.to_string())?;
+    pub fn add_tag_to_content(&mut self, request: ContentTagRequest) -> Result<ContentTag, String> {
+        let content_tags = self.content_tags.read();
 
         if content_tags
             .iter()
@@ -181,7 +150,7 @@ impl LocalTagService {
 
         drop(content_tags);
 
-        let id = self.next_content_tag_id.fetch_add(1, Ordering::SeqCst) as i32;
+        let id = self.next_content_tag_id.cloned() as i32;
         let now = chrono::Utc::now();
         let content_tag = ContentTag {
             id: Some(id),
@@ -190,7 +159,7 @@ impl LocalTagService {
             created_at: Some(now),
         };
 
-        let mut content_tags = self.content_tags.write().map_err(|e| e.to_string())?;
+        let mut content_tags = self.content_tags.write();
         content_tags.push(content_tag.clone());
         drop(content_tags);
 
@@ -199,8 +168,8 @@ impl LocalTagService {
         Ok(content_tag)
     }
 
-    pub fn remove_tag_from_content(&self, content_id: i32, tag_id: i32) -> Result<(), String> {
-        let mut content_tags = self.content_tags.write().map_err(|e| e.to_string())?;
+    pub fn remove_tag_from_content(&mut self, content_id: i32, tag_id: i32) -> Result<(), String> {
+        let mut content_tags = self.content_tags.write();
         let initial_len = content_tags.len();
         content_tags.retain(|ct| ct.content_id != content_id || ct.tag_id != tag_id);
 
@@ -219,20 +188,20 @@ impl LocalTagService {
         if let Some(window) = web_sys::window()
             && let Ok(Some(storage)) = window.local_storage()
         {
-            let tags = self.tags.read().unwrap();
+            let tags = self.tags.read();
             if let Ok(json) = serde_json::to_string(&*tags) {
                 let _ = storage.set_item(Self::TAGS_KEY, &json);
             }
 
-            let content_tags = self.content_tags.read().unwrap();
+            let content_tags = self.content_tags.read();
             if let Ok(json) = serde_json::to_string(&*content_tags) {
                 let _ = storage.set_item(Self::CONTENT_TAGS_KEY, &json);
             }
 
-            let next_tag_id = self.next_tag_id.load(Ordering::SeqCst);
+            let next_tag_id = self.next_tag_id.cloned();
             let _ = storage.set_item(Self::NEXT_TAG_ID_KEY, &next_tag_id.to_string());
 
-            let next_content_tag_id = self.next_content_tag_id.load(Ordering::SeqCst);
+            let next_content_tag_id = self.next_content_tag_id.cloned();
             let _ = storage.set_item(
                 Self::NEXT_CONTENT_TAG_ID_KEY,
                 &next_content_tag_id.to_string(),
@@ -240,36 +209,34 @@ impl LocalTagService {
         }
     }
 
-    fn load_from_persistence(&self) {
+    fn load_from_persistence(&mut self) {
         if let Some(window) = web_sys::window()
             && let Ok(Some(storage)) = window.local_storage()
         {
             if let Ok(Some(json)) = storage.get_item(Self::TAGS_KEY)
                 && let Ok(loaded) = serde_json::from_str::<Vec<Tag>>(&json)
             {
-                let mut tags = self.tags.write().unwrap();
+                let mut tags = self.tags.write();
                 *tags = loaded;
                 if let Some(max_id) = tags.iter().filter_map(|t| t.id).max() {
-                    self.next_tag_id
-                        .store(max_id as usize + 1, Ordering::SeqCst);
+                    *self.next_tag_id.write() = (max_id + 1) as usize;
                 }
             }
 
             if let Ok(Some(json)) = storage.get_item(Self::CONTENT_TAGS_KEY)
                 && let Ok(loaded) = serde_json::from_str::<Vec<ContentTag>>(&json)
             {
-                let mut content_tags = self.content_tags.write().unwrap();
+                let mut content_tags = self.content_tags.write();
                 *content_tags = loaded;
                 if let Some(max_id) = content_tags.iter().filter_map(|ct| ct.id).max() {
-                    self.next_content_tag_id
-                        .store(max_id as usize + 1, Ordering::SeqCst);
+                    *self.next_content_tag_id.write() = (max_id + 1) as usize;
                 }
             }
         }
     }
 
-    fn initialize_default_tags(&self) {
-        let tags = self.tags.read().unwrap();
+    fn initialize_default_tags(&mut self) {
+        let tags = self.tags.read();
         if tags.is_empty() {
             drop(tags);
             let now = chrono::Utc::now();
@@ -402,12 +369,11 @@ impl LocalTagService {
                 },
             ];
 
-            let mut tags = self.tags.write().unwrap();
+            let mut tags = self.tags.write();
             *tags = default_tags;
-            self.next_tag_id.store(15, Ordering::SeqCst);
-            drop(tags);
-            self.save_to_persistence();
+            *self.next_tag_id.write() = 15;
         }
+        self.save_to_persistence();
     }
 }
 
