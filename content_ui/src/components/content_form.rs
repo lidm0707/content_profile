@@ -1,5 +1,10 @@
 use crate::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use crate::utils::markdown::update_tags_in_frontmatter;
+use crate::utils::{
+    format_blockquote, format_bold, format_code, format_code_block, format_heading, format_image,
+    format_italic, format_link, format_ordered_list, format_unordered_list,
+    render_markdown_to_html,
+};
 use dioxus::prelude::*;
 use tracing::debug;
 
@@ -63,6 +68,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     });
     let mut isSubmitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
+    let mut isPreviewMode = use_signal(|| false);
 
     let is_editing = props.content.read().is_some();
     let title_text = if is_editing {
@@ -97,6 +103,62 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         if slug.read().is_empty() {
             slug.write().clone_from(&Content::generate_slug(&new_title));
         }
+    };
+
+    // Formatting handlers
+    let handle_format_bold = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_bold(&current_body);
+    };
+
+    let handle_format_italic = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_italic(&current_body);
+    };
+
+    let handle_format_code = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_code(&current_body);
+    };
+
+    let handle_format_code_block = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_code_block(&current_body);
+    };
+
+    let handle_format_heading = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_heading(&current_body, 2);
+    };
+
+    let handle_format_link = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_link(&current_body, "https://");
+    };
+
+    let handle_format_unordered_list = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_unordered_list(&current_body);
+    };
+
+    let handle_format_ordered_list = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_ordered_list(&current_body, 1);
+    };
+
+    let handle_format_blockquote = move |_| {
+        let current_body = body.read().clone();
+        *body.write() = format_blockquote(&current_body);
+    };
+
+    let handle_format_image = move |_| {
+        let current_body = body.read().clone();
+        let image_markdown = format_image("Alt text", "https://");
+        *body.write() = if current_body.trim().is_empty() {
+            image_markdown
+        } else {
+            format!("{}\n\n{}", current_body, image_markdown)
+        };
     };
 
     let handle_submit = move |_| {
@@ -269,15 +331,164 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 class: "block text-sm font-medium text-gray-700",
                                 "Content"
                             }
+
+                            // Preview/Edit toggle
+                            div {
+                                class: "mb-2 flex items-center space-x-2",
+
+                                button {
+                                    r#type: "button",
+                                    class: if *isPreviewMode.read() {
+                                        "px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    } else {
+                                        "px-3 py-1.5 text-sm border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    },
+                                    onclick: move |_| {
+                                        isPreviewMode.set(false);
+                                    },
+                                    disabled: *isSubmitting.read(),
+                                    "Edit"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: if *isPreviewMode.read() {
+                                        "px-3 py-1.5 text-sm border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    } else {
+                                        "px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    },
+                                    onclick: move |_| {
+                                        isPreviewMode.set(true);
+                                    },
+                                    disabled: *isSubmitting.read(),
+                                    "Preview"
+                                }
+                            }
+
+                            // Formatting toolbar (only shown in edit mode)
+                            if !*isPreviewMode.read() {
+
+                            // Formatting toolbar
+                            div {
+                                class: "mb-2 border border-gray-300 rounded-t-md bg-gray-50 p-2 flex flex-wrap gap-1",
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_bold,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Bold",
+                                    "B"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_italic,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Italic",
+                                    "I"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_heading,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Heading",
+                                    "H2"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_link,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Link",
+                                    "🔗"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_image,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Image",
+                                    "🖼️"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_code,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Inline Code",
+                                    "&lt;/&gt;"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_code_block,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Code Block",
+                                    "Code"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_unordered_list,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Bullet List",
+                                    "•"
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_ordered_list,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Numbered List",
+                                    "1."
+                                }
+
+                                button {
+                                    r#type: "button",
+                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                                    onclick: handle_format_blockquote,
+                                    disabled: *isSubmitting.read(),
+                                    title: "Blockquote",
+                                    "Quote"
+                                }
+                            }
+
                             textarea {
                                 value: "{body}",
-                                class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                                class: "mt-0 block w-full border border-gray-300 border-t-0 rounded-b-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono",
                                 rows: 8,
                                 oninput: move |e: Event<FormData>| {
                                     *body.write() = e.value();
                                 },
                                 disabled: *isSubmitting.read()
                             }
+                        } else {
+                            // Preview mode - show rendered markdown
+                            div {
+                                class: "mt-0 block w-full border border-gray-300 rounded-md shadow-sm py-3 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm min-h-[200px] bg-gray-50",
+                                if body.read().trim().is_empty() {
+                                    p {
+                                        class: "text-gray-400 italic",
+                                        "No content to preview"
+                                    }
+                                } else {
+                                    div {
+                                        class: "prose prose-sm max-w-none",
+                                        dangerous_inner_html: render_markdown_to_html(&body.read()),
+                                    }
+                                }
+                            }
+                        }
                         }
 
                         // Tags field

@@ -13,18 +13,24 @@
 //! ## Using Hooks
 //!
 //! ```rust
-//! use content_sdk::hooks::UseBlogs;
+//! use content_sdk::hooks::UseContent;
+//! use content_sdk::models::Content;
 //! use dioxus::prelude::*;
+//! use supabase_client::client_config;
 //!
 //! #[component]
-//! fn BlogPage() -> Element {
-//!     let blogs = UseBlogs::new();
+//! fn ContentPage() -> Element {
+//!     let config = client_config(
+//!         "https://your-project.supabase.co".to_string(),
+//!         "your-anon-key".to_string(),
+//!     );
+//!     let content = UseContent::new(config);
 //!
 //!     rsx! {
-//!         match blogs.read() {
-//!             Some(Ok(blog_list)) => rsx! {
-//!                 for blog in blog_list {
-//!                     div { "{blog.title}" }
+//!         match content.read() {
+//!             Some(Ok(content_list)) => rsx! {
+//!                 for item in content_list {
+//!                     div { "{item.title}" }
 //!                 }
 //!             },
 //!             Some(Err(e)) => rsx! { div { "Error: {e}" } },
@@ -46,7 +52,6 @@
 //! ## Hooks
 //!
 //! Reusable hooks for data fetching and state management:
-//! - [`UseBlogs`] - Hook for fetching and filtering blogs
 //! - [`UseContent`] - Hook for fetching and filtering content
 //! - [`UseTags`] - Hook for fetching and filtering tags
 //!

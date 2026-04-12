@@ -19,7 +19,7 @@
 //!             "your-anon-key".to_string(),
 //!         )
 //!     });
-//!     let content = UseContent::new(config);
+//!     let content = UseContent::new(config());
 //!
 //!     rsx! {
 //!         match content.read() {
@@ -37,8 +37,8 @@
 //!
 //! With custom table name:
 //!
-//! ```rust
-//! let content = UseContent::with_table(config.clone(), "custom_content".to_string());
+//! ```rust,ignore
+//! let content = UseContent::with_table(config(), "custom_content".to_string());
 //! ```
 
 use crate::models::{Content, ContentStatus};

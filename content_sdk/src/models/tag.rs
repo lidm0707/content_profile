@@ -1,12 +1,9 @@
-//! Tag model
-//!
-//! This module defines the Tag struct and related types for representing tags.
-
 use chrono::{DateTime, Utc};
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Tag model
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct Tag {
     /// Unique identifier
     pub id: Option<i32>,
@@ -97,7 +94,7 @@ impl Tag {
 }
 
 /// Request structure for creating/updating tags
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct TagRequest {
     /// Tag ID
     pub id: Option<i32>,

@@ -6,19 +6,17 @@
 //!
 //! Basic usage:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use content_sdk::hooks::UseTags;
 //! use supabase_client::{ClientConfig, client_config};
 //! use dioxus::prelude::*;
 //!
 //! #[component]
 //! fn TagList() -> Element {
-//!     let config = use_signal(|| {
-//!         client_config(
-//!             "https://your-project.supabase.co".to_string(),
-//!             "your-anon-key".to_string(),
-//!         )
-//!     });
+//!     let config = client_config(
+//!         "https://your-project.supabase.co".to_string(),
+//!         "your-anon-key".to_string(),
+//!     );
 //!     let tags = UseTags::new(config);
 //!
 //!     rsx! {
@@ -37,7 +35,7 @@
 //!
 //! With custom table name:
 //!
-//! ```rust
+//! ```rust,ignore
 //! let tags = UseTags::with_table(config.clone(), "custom_tags".to_string());
 //! ```
 

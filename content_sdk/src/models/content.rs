@@ -1,16 +1,11 @@
-//! Content model
-//!
-//! This module defines the Content struct and related types for representing content items.
-
 use chrono::{DateTime, Utc};
+use dioxus::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize};
-
 /// Content status constants
 pub const STATUS_DRAFT: &str = "draft";
 pub const STATUS_PUBLISHED: &str = "published";
 pub const STATUS_ARCHIVED: &str = "archived";
 
-/// Content status enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContentStatus {
@@ -61,7 +56,7 @@ where
 }
 
 /// Content model
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct Content {
     /// Unique identifier
     pub id: Option<i32>,
@@ -223,7 +218,7 @@ impl Content {
 }
 
 /// Request structure for creating/updating content
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct ContentRequest {
     /// Content ID (0 for new content)
     pub id: Option<i32>,

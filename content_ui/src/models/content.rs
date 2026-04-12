@@ -5,7 +5,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// Content status constants
 pub const STATUS_DRAFT: &str = "draft";
 pub const STATUS_PUBLISHED: &str = "published";
-pub const STATUS_ARCHIVED: &str = "archived";
 
 /// Custom deserializer for optional datetime fields that handles empty strings
 fn deserialize_optional_datetime<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
@@ -79,15 +78,15 @@ impl Content {
 }
 
 /// Custom serializer for id field - converts None to 0 for create operations
-fn serialize_id<S>(id: &Option<i32>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match id {
-        Some(value) => serializer.serialize_i32(*value),
-        None => serializer.serialize_i32(0),
-    }
-}
+// fn serialize_id<S>(id: &Option<i32>, serializer: S) -> Result<S::Ok, S::Error>
+// where
+//     S: serde::Serializer,
+// {
+//     match id {
+//         Some(value) => serializer.serialize_i32(*value),
+//         None => serializer.serialize_i32(0),
+//     }
+// }
 
 /// Request structure for creating/updating content
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]

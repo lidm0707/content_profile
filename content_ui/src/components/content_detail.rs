@@ -1,6 +1,7 @@
 use crate::contexts::{ContentContext, TagContext};
-use crate::models::{Content, STATUS_ARCHIVED, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
+use crate::models::{Content, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use crate::routes::Route;
+use crate::utils::render_markdown_to_html;
 use dioxus::prelude::*;
 
 /// Props for the tag button component
@@ -110,7 +111,7 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
         _ => "bg-blue-100 text-blue-800",
     };
 
-    let formatted_body = format_content_body(&content.body);
+    let formatted_body = render_markdown_to_html(&content.body);
 
     rsx! {
         div {
@@ -337,23 +338,4 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
             }
         }
     }
-}
-
-/// Formats the content body for display (simple line breaks to paragraphs)
-/// Escapes HTML special characters to prevent XSS attacks
-fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
-/// Formats content body by converting newlines to paragraphs and escaping HTML
-fn format_content_body(body: &str) -> String {
-    body.split('\n')
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| format!("<p>{}</p>", escape_html(line)))
-        .collect::<Vec<String>>()
-        .join("")
 }

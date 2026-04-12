@@ -5,11 +5,19 @@
 //! # Examples
 //!
 //! ```rust
-//! use content_sdk::hooks::use_content;
+//! use content_sdk::hooks::UseContent;
+//! use dioxus::prelude::*;
+//! use supabase_client::{ClientConfig, client_config};
 //!
 //! #[component]
 //! fn ContentList() -> Element {
-//!     let content = use_content();
+//!     let config = use_signal(|| {
+//!         client_config(
+//!             "https://your-project.supabase.co".to_string(),
+//!             "your-anon-key".to_string(),
+//!         )
+//!     });
+//!     let content = UseContent::new(config());
 //!
 //!     match content.read() {
 //!         Some(Ok(items)) => rsx! {

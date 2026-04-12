@@ -29,6 +29,7 @@ tracing-wasm = { workspace = true }
 console_log = { workspace = true }
 getrandom = { workspace = true, optional = true }
 url = { workspace = true }
+pulldown-cmark = "0.13.3"
 
 
 

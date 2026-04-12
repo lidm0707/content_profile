@@ -83,6 +83,26 @@ impl TagService {
 
         Ok(())
     }
+
+    pub async fn create_tag(&mut self, request: crate::models::TagRequest) -> Result<Tag, String> {
+        self.local_service.create_tag(request)
+    }
+
+    pub async fn update_tag(
+        &mut self,
+        id: i32,
+        request: crate::models::TagRequest,
+    ) -> Result<Tag, String> {
+        self.local_service.update_tag(id, request)
+    }
+
+    pub async fn delete_tag(&mut self, id: i32) -> Result<(), String> {
+        self.local_service.delete_tag(id)
+    }
+
+    pub async fn get_tag_by_id(&self, id: i32) -> Result<Option<Tag>, String> {
+        self.local_service.get_tag_by_id(id)
+    }
 }
 
 impl Default for TagService {
@@ -182,6 +202,100 @@ impl LocalTagService {
         self.save_to_persistence();
 
         Ok(())
+    }
+
+    pub fn create_tag(&mut self, request: crate::models::TagRequest) -> Result<Tag, String> {
+        let tags = self.tags.read();
+
+        if tags.iter().any(|t| t.slug == request.slug) {
+            return Err("Tag with this slug already exists".to_string());
+        }
+
+        drop(tags);
+
+        let id = self.next_tag_id.cloned() as i32;
+        let now = chrono::Utc::now();
+        let tag = Tag {
+            id: Some(id),
+            name: request.name.clone(),
+            slug: request.slug.clone(),
+            parent_id: request.parent_id,
+            created_at: Some(now),
+            updated_at: Some(now),
+            synced_at: None,
+        };
+
+        let mut tags = self.tags.write();
+        tags.push(tag.clone());
+        drop(tags);
+
+        *self.next_tag_id.write() += 1;
+        self.save_to_persistence();
+
+        Ok(tag)
+    }
+
+    pub fn update_tag(
+        &mut self,
+        id: i32,
+        request: crate::models::TagRequest,
+    ) -> Result<Tag, String> {
+        let mut tags = self.tags.write();
+
+        let tag_index = tags
+            .iter()
+            .position(|t| t.id == Some(id))
+            .ok_or_else(|| "Tag not found".to_string())?;
+
+        if tags
+            .iter()
+            .any(|t| t.slug == request.slug && t.id != Some(id))
+        {
+            return Err("Tag with this slug already exists".to_string());
+        }
+
+        let now = chrono::Utc::now();
+        let updated_tag = Tag {
+            id: Some(id),
+            name: request.name.clone(),
+            slug: request.slug.clone(),
+            parent_id: request.parent_id,
+            created_at: tags[tag_index].created_at,
+            updated_at: Some(now),
+            synced_at: None,
+        };
+
+        tags[tag_index] = updated_tag.clone();
+        drop(tags);
+
+        self.save_to_persistence();
+
+        Ok(updated_tag)
+    }
+
+    pub fn delete_tag(&mut self, id: i32) -> Result<(), String> {
+        let mut content_tags = self.content_tags.write();
+        content_tags.retain(|ct| ct.tag_id != id);
+        drop(content_tags);
+
+        let mut tags = self.tags.write();
+        let initial_len = tags.len();
+        tags.retain(|t| t.id != Some(id));
+
+        if tags.len() == initial_len {
+            return Err("Tag not found".to_string());
+        }
+
+        drop(tags);
+
+        self.save_to_persistence();
+
+        Ok(())
+    }
+
+    pub fn get_tag_by_id(&self, id: i32) -> Result<Option<Tag>, String> {
+        let tags = self.tags.read();
+        Ok(tags.iter().find(|t| t.id == Some(id)).cloned())
     }
 
     fn save_to_persistence(&self) {
@@ -455,6 +569,69 @@ impl SupabaseTagService {
         } else {
             Err("ContentTag not found".to_string())
         }
+    }
+
+    pub async fn create_tag(&self, request: crate::models::TagRequest) -> Result<Tag, String> {
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let now = chrono::Utc::now();
+        let tag = Tag {
+            id: None,
+            name: request.name,
+            slug: request.slug,
+            parent_id: request.parent_id,
+            created_at: Some(now),
+            updated_at: Some(now),
+            synced_at: None,
+        };
+
+        let result = create::<Tag, Tag>(&config, TAGS_TABLE, &tag).await?;
+        result
+            .into_iter()
+            .next()
+            .ok_or_else(|| "Failed to create tag".to_string())
+    }
+
+    pub async fn update_tag(
+        &self,
+        id: i32,
+        request: crate::models::TagRequest,
+    ) -> Result<Tag, String> {
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let now = chrono::Utc::now();
+        let tag = Tag {
+            id: Some(id),
+            name: request.name,
+            slug: request.slug,
+            parent_id: request.parent_id,
+            created_at: None,
+            updated_at: Some(now),
+            synced_at: None,
+        };
+
+        let result = supabase_client::update::<Tag, Tag>(&config, TAGS_TABLE, id, &tag).await?;
+        result
+            .into_iter()
+            .next()
+            .ok_or_else(|| "Failed to update tag".to_string())
+    }
+
+    pub async fn delete_tag(&self, id: i32) -> Result<(), String> {
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        delete(&config, TAGS_TABLE, id).await
+    }
+
+    pub async fn get_tag_by_id(&self, id: i32) -> Result<Option<Tag>, String> {
+        let app_config = get_config();
+        let config = build_client_config(&app_config)?;
+
+        let tags: Vec<Tag> = get(&config, TAGS_TABLE, &[("id", &id.to_string())]).await?;
+        Ok(tags.into_iter().next())
     }
 }
 

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::MainLayout;
 use crate::contexts::{ContentContext, SyncContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
@@ -50,7 +51,8 @@ pub fn App() -> Element {
         document::Link { rel: "icon", href: FAVICON }
         document::Stylesheet { href: TAILWIND_CSS }
 
-        // Main application router
-        Router::<crate::routes::Route> {}
+
+            Router::<crate::routes::Route> {}
+
     }
 }

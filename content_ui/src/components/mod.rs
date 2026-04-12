@@ -6,4 +6,5 @@ pub mod navbar;
 
 pub use content_form::ContentForm;
 pub use content_list::ContentList;
+pub use main_layout::MainLayout;
 pub use navbar::Navbar;

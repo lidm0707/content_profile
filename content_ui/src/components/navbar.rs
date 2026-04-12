@@ -13,7 +13,6 @@ pub fn Navbar() -> Element {
         // Fixed navbar at the top
         nav {
             class: "bg-gray-100 border-b-2 border-gray-200 shadow-md fixed w-full top-0 z-50 h-16",
-
             div {
                 class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
 
@@ -48,6 +47,12 @@ pub fn Navbar() -> Element {
                                 class: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors",
                                 "Dashboard"
                             }
+                            Link {
+                                to: Route::TagsList {},
+                                class: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors",
+                                "Tags"
+                            }
+
                         }
                     }
 
