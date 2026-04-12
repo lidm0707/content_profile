@@ -15,11 +15,6 @@ impl UserContext {
         }
     }
 
-    /// Gets the auth service (for internal use)
-    pub fn auth_service(&self) -> &AuthService {
-        &self.auth_service
-    }
-
     /// Logs in a user with email and password
     pub async fn login(&self, email: String, password: String) -> Result<Session, String> {
         let request = LoginRequest { email, password };
@@ -42,21 +37,6 @@ impl UserContext {
             let _ = self.auth_service.logout(&session.access_token).await;
         }
         SessionStorage::clear_session()
-    }
-
-    /// Refreshes the access token
-    pub async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<crate::models::Session, String> {
-        let session = self.auth_service.refresh_token(refresh_token).await?;
-        SessionStorage::save_session(&session)?;
-        Ok(session)
-    }
-
-    /// Gets the current user from the server
-    pub async fn get_user(&self, access_token: &str) -> Result<crate::models::User, String> {
-        self.auth_service.get_user(access_token).await
     }
 
     /// Loads the saved session from storage

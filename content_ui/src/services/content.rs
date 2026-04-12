@@ -24,21 +24,6 @@ impl ContentService {
         }
     }
 
-    /// Gets the current app mode
-    pub fn mode(&self) -> AppMode {
-        self.mode
-    }
-
-    /// Checks if running in office mode
-    pub fn is_office_mode(&self) -> bool {
-        self.mode == AppMode::Office
-    }
-
-    /// Checks if running in Supabase mode
-    pub fn is_supabase_mode(&self) -> bool {
-        self.mode == AppMode::Supabase
-    }
-
     /// Fetches all content items
     pub async fn get_all_content(&self) -> Result<Vec<Content>, String> {
         debug!("Getting all content (mode: {:?})", self.mode);

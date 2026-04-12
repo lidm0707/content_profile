@@ -120,10 +120,6 @@ impl Config {
         config
     }
 
-    pub fn new() -> Result<Self, String> {
-        todo!("Implement Config::new for different environments")
-    }
-
     pub fn dev_config() -> Self {
         info!("Loading configuration...");
         Self::wasm_config()
@@ -139,14 +135,6 @@ impl Config {
 
     pub fn is_sync_enabled(&self) -> bool {
         self.sync_enabled
-    }
-
-    pub fn get_supabase_url(&self) -> Option<&String> {
-        self.supabase_url.as_ref()
-    }
-
-    pub fn get_supabase_anon_key(&self) -> Option<&String> {
-        self.supabase_anon_key.as_ref()
     }
 }
 

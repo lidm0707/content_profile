@@ -9,6 +9,16 @@ pub fn Navbar() -> Element {
     let user_context: UserContext = use_context();
     let mut session: Signal<Option<Session>> = use_context();
 
+    // Load saved session on mount if not already present
+    use_effect(move || {
+        if session().is_none()
+            && UserContext::has_valid_saved_session()
+            && let Ok(Some(saved_session)) = UserContext::load_saved_session()
+        {
+            session.set(Some(saved_session));
+        }
+    });
+
     rsx! {
         // Fixed navbar at the top
         nav {
@@ -97,12 +107,13 @@ pub fn Navbar() -> Element {
                                 button {
                                     onclick: move |_| {
                                         let user_context = user_context.clone();
+                                        let mut session = session;
                                         let navigator = use_navigator();
                                         spawn(async move {
                                             let _ = user_context.logout().await;
+                                            session.write().take();
+                                            navigator.push(Route::Login {});
                                         });
-                                        session.write().take();
-                                        navigator.push(Route::Login {});
                                     },
                                     class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors shadow-sm",
                                     "Logout"
