@@ -169,9 +169,6 @@ impl UseTags {
                         .filter(|t| {
                             t.name.to_lowercase().contains(&query_lower)
                                 || t.slug.to_lowercase().contains(&query_lower)
-                                || t.description
-                                    .as_ref()
-                                    .map_or(false, |d| d.to_lowercase().contains(&query_lower))
                         })
                         .collect();
                 }

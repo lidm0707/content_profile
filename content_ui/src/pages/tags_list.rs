@@ -1,6 +1,6 @@
 use crate::contexts::TagContext;
-use crate::models::Tag;
 use crate::routes::Route;
+use content_sdk::models::Tag;
 use dioxus::prelude::*;
 use tracing::{debug, warn};
 

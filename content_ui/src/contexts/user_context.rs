@@ -1,5 +1,6 @@
-use crate::models::{LoginRequest, Session};
-use crate::services::{AuthService, SessionStorage};
+use content_sdk::models::{LoginRequest, Session};
+use content_sdk::services::{AuthService, SessionStorage};
+use content_sdk::utils::config::Config;
 
 /// User context for managing authentication state across the app
 #[derive(Clone)]
@@ -9,9 +10,9 @@ pub struct UserContext {
 
 impl UserContext {
     /// Creates a new UserContext
-    pub fn new() -> Self {
+    pub fn new(config: Option<Config>) -> Self {
         UserContext {
-            auth_service: AuthService::new(),
+            auth_service: AuthService::new(config),
         }
     }
 
@@ -67,6 +68,6 @@ impl UserContext {
 
 impl Default for UserContext {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

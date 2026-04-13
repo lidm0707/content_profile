@@ -1,8 +1,9 @@
 use dioxus::prelude::Props;
 use dioxus::signals::{ReadableExt, Signal};
 
-use crate::models::{Content, ContentRequest};
-use crate::services::ContentService;
+use content_sdk::models::{Content, ContentRequest};
+use content_sdk::services::ContentService;
+use content_sdk::utils::config::Config;
 use dioxus::prelude::*;
 
 /// Content context for managing content state across the app
@@ -13,9 +14,9 @@ pub struct ContentContext {
 
 impl ContentContext {
     /// Creates a new ContentContext
-    pub fn new() -> Self {
+    pub fn new(config: Option<Config>) -> Self {
         ContentContext {
-            content_service: Signal::new(ContentService::new()),
+            content_service: Signal::new(ContentService::new(config)),
         }
     }
 
@@ -81,6 +82,6 @@ impl ContentContext {
 
 impl Default for ContentContext {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

@@ -4,13 +4,12 @@ fn main() {
     println!("cargo:rerun-if-changed=.env");
 
     // Provide default values for missing environment variables
-    let sync_enabled = std::env::var("SYNC_ENABLED").unwrap_or_else(|_| "false".to_string());
-    let app_mode = std::env::var("APP_MODE").unwrap_or_else(|_| "office".to_string());
-    let supabase_url = std::env::var("SUPABASE_URL").unwrap_or_else(|_| "".to_string());
-    let supabase_anon_key = std::env::var("SUPABASE_ANON_KEY").unwrap_or_else(|_| "".to_string());
+    let app_mode = std::env::var("APP_MODE").expect("not found ENV: APP_MODE");
+    let supabase_url = std::env::var("SUPABASE_URL").expect("not found ENV: SUPABASE_URL");
+    let supabase_anon_key =
+        std::env::var("SUPABASE_ANON_KEY").expect("not found ENV: SUPABASE_ANON_KEY");
 
     // Print all relevant env vars (including defaults)
-    println!("cargo:rustc-env=SYNC_ENABLED={}", sync_enabled);
     println!("cargo:rustc-env=APP_MODE={}", app_mode);
     println!("cargo:rustc-env=SUPABASE_URL={}", supabase_url);
     println!("cargo:rustc-env=SUPABASE_ANON_KEY={}", supabase_anon_key);

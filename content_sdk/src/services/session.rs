@@ -35,9 +35,9 @@ impl SessionStorage {
     pub fn load_session() -> Result<Option<Session>, String> {
         if let Some(window) = web_sys::window()
             && let Ok(Some(storage)) = window.local_storage()
-            && let Ok(Some(json)) = storage.get_item(Self::SESSION_KEY)
+            && let Ok(Some(json_string)) = storage.get_item(Self::SESSION_KEY)
         {
-            let stored: StoredSession = serde_json::from_str(&json)
+            let stored: StoredSession = serde_json::from_str(&json_string)
                 .map_err(|e| format!("Failed to deserialize session: {}", e))?;
             return Ok(Some(stored.session));
         }

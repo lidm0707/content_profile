@@ -1,10 +1,14 @@
-//! Content models module
-//!
-//! This module contains all the data models used throughout the SDK.
-
+// Local content models
 pub mod content;
+
+// Local auth models
+pub mod auth;
+
+// Local tag models
+pub mod content_tag;
 pub mod tag;
 
-// Re-export commonly used types for convenience
-pub use content::{Content, ContentRequest, ContentStatus};
+pub use auth::{AuthError, AuthResponse, LoginRequest, Session, User};
+pub use content::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED};
+pub use content_tag::{ContentTag, ContentTagRequest};
 pub use tag::{Tag, TagRequest};

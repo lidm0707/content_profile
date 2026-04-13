@@ -55,6 +55,20 @@
 //! - [`UseContent`] - Hook for fetching and filtering content
 //! - [`UseTags`] - Hook for fetching and filtering tags
 //!
+//! ## Services
+//!
+//! Service functions for authentication, content management, and data synchronization:
+//! - Auth services for user authentication and session management
+//! - Content services for CRUD operations on content items
+//! - Tag services for managing content tags
+//! - Sync services for offline/online data synchronization
+//!
+//! ## Utils
+//!
+//! Utility functions for configuration, markdown processing, and common operations:
+//! - Config utilities for application configuration
+//! - Markdown utilities for text processing
+//!
 //! # Customization
 //!
 //! All hooks support extensive customization:
@@ -72,9 +86,15 @@ pub mod models;
 // Re-export hooks
 pub mod hooks;
 
+// Re-export services
+pub mod services;
+
+// Re-export utils
+pub mod utils;
+
 // Re-export commonly used models for convenience
 pub use models::{
-    content::{Content, ContentRequest, ContentStatus},
+    content::{Content, ContentRequest},
     tag::{Tag, TagRequest},
 };
 

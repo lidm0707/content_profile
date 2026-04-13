@@ -1,12 +1,11 @@
 // Module declarations
+use dioxus::prelude::*;
+
 mod app;
 mod components;
 mod contexts;
-mod models;
 mod pages;
 mod routes;
-mod services;
-mod utils;
 
 fn init_tracing() {
     use log::Level;
@@ -18,5 +17,9 @@ fn init_tracing() {
 fn main() {
     init_tracing();
     tracing::info!("Starting application...");
-    dioxus::launch(app::App);
+    dioxus::launch(|| {
+        rsx! {
+                app::App {}
+        }
+    });
 }

@@ -1,6 +1,7 @@
+use content_sdk::utils::config::Config;
 use dioxus::prelude::*;
 
-use crate::contexts::{ContentContext, SyncContext, TagContext, UserContext};
+use crate::contexts::{ContentContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
@@ -9,24 +10,24 @@ const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 #[component]
 pub fn App() -> Element {
     let content_refresh_count = use_signal(|| 0u64);
+    let mode = env!("APP_MODE");
+    let supabase_url = env!("SUPABASE_URL");
+    let supabase_anon_key = env!("SUPABASE_ANON_KEY");
+    let config = Config::new(mode, supabase_url, supabase_anon_key);
 
     use_context_provider(move || content_refresh_count);
 
     // Create UserContext
-    let user_context = UserContext::new();
+    let user_context = UserContext::new(Some(config.clone()));
     use_context_provider(move || user_context.clone());
 
     // Create ContentContext
-    let content_context = ContentContext::new();
+    let content_context = ContentContext::new(Some(config.clone()));
     use_context_provider(move || content_context.clone());
 
     // Create TagContext
-    let tag_context = TagContext::new();
+    let tag_context = TagContext::new(Some(config.clone()));
     use_context_provider(move || tag_context.clone());
-
-    // Create SyncContext
-    let sync_context = SyncContext::new();
-    use_context_provider(move || sync_context.clone());
 
     // Load saved session and create session signal
     let session_signal = use_signal(|| {

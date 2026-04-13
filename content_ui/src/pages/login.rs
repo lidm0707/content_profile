@@ -1,6 +1,6 @@
 use crate::contexts::UserContext;
-use crate::models::Session;
 use crate::routes::Route;
+use content_sdk::models::Session;
 use dioxus::prelude::*;
 
 const TITLE: &str = "Login";

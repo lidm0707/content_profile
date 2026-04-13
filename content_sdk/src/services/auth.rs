@@ -1,5 +1,5 @@
 use crate::models::{AuthError, AuthResponse, LoginRequest, Session, User};
-use crate::utils::config::get_config;
+use crate::utils::config::Config;
 use gloo_net::http::Headers;
 use gloo_net::http::Request;
 
@@ -12,14 +12,11 @@ pub struct AuthService {
 }
 
 impl AuthService {
-    pub fn new() -> Self {
-        let config = get_config();
-        let base_url = config.supabase_url;
+    pub fn new(config: Option<Config>) -> Self {
+        let base_url = config.as_ref().and_then(|c| c.supabase_url.clone());
+        let anon_key = config.as_ref().and_then(|c| c.supabase_anon_key.clone());
 
-        AuthService {
-            base_url,
-            anon_key: config.supabase_anon_key,
-        }
+        AuthService { base_url, anon_key }
     }
 
     fn auth_url(&self) -> String {
@@ -77,7 +74,7 @@ impl AuthService {
 
         if !response.ok() {
             let error: AuthError = response
-                .json()
+                .json::<AuthError>()
                 .await
                 .map_err(|e| format!("Failed to parse error response: {}", e))?;
             return Err(format!(
@@ -87,7 +84,7 @@ impl AuthService {
         }
 
         let auth_response: AuthResponse = response
-            .json()
+            .json::<AuthResponse>()
             .await
             .map_err(|e| format!("Failed to parse auth response: {}", e))?;
 
@@ -117,7 +114,7 @@ impl AuthService {
 
         if !response.ok() {
             let error: AuthError = response
-                .json()
+                .json::<AuthError>()
                 .await
                 .map_err(|e| format!("Failed to parse error response: {}", e))?;
             return Err(format!(
@@ -127,7 +124,7 @@ impl AuthService {
         }
 
         let auth_response: AuthResponse = response
-            .json()
+            .json::<AuthResponse>()
             .await
             .map_err(|e| format!("Failed to parse auth response: {}", e))?;
 
@@ -152,7 +149,7 @@ impl AuthService {
 
         if !response.ok() {
             let error: AuthError = response
-                .json()
+                .json::<AuthError>()
                 .await
                 .map_err(|e| format!("Failed to parse error response: {}", e))?;
             return Err(format!(
@@ -182,7 +179,7 @@ impl AuthService {
 
         if !response.ok() {
             let error: AuthError = response
-                .json()
+                .json::<AuthError>()
                 .await
                 .map_err(|e| format!("Failed to parse error response: {}", e))?;
             return Err(format!(
@@ -192,7 +189,7 @@ impl AuthService {
         }
 
         let user: User = response
-            .json()
+            .json::<User>()
             .await
             .map_err(|e| format!("Failed to parse user response: {}", e))?;
 
@@ -221,7 +218,7 @@ impl AuthService {
 
         if !response.ok() {
             let error: AuthError = response
-                .json()
+                .json::<AuthError>()
                 .await
                 .map_err(|e| format!("Failed to parse error response: {}", e))?;
             return Err(format!(
@@ -231,7 +228,7 @@ impl AuthService {
         }
 
         let auth_response: AuthResponse = response
-            .json()
+            .json::<AuthResponse>()
             .await
             .map_err(|e| format!("Failed to parse auth response: {}", e))?;
 
@@ -243,6 +240,6 @@ impl AuthService {
 
 impl Default for AuthService {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

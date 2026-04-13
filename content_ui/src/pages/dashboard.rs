@@ -1,13 +1,7 @@
-use crate::components::{
-    ContentList as ContentListComponent, NotificationCard, NotificationVariant, StatCard,
-};
-use crate::contexts::TagContext;
-use crate::contexts::UserContext;
-use crate::models::{Content, Tag};
+use crate::components::{ContentList as ContentListComponent, StatCard};
+use crate::contexts::{ContentContext, TagContext, UserContext};
 use crate::routes::Route;
-use crate::services::{ContentService, SyncService};
-use crate::utils::config::{Config, get_config};
-
+use content_sdk::models::{Content, Tag};
 use dioxus::prelude::*;
 use dioxus_router::Navigator;
 
@@ -91,16 +85,15 @@ fn render_tags_section(
 /// Props for dashboard header component
 #[derive(Clone, PartialEq, Props)]
 struct DashboardHeaderProps {
-    config: Config,
-    on_sync: EventHandler<MouseEvent>,
-    sync_result: Resource<Result<(), String>>,
+    is_office_mode: bool,
+    is_supabase_mode: bool,
     on_refresh: EventHandler<MouseEvent>,
 }
 
 /// Dashboard header component - displays title, mode badge, and action buttons
 #[component]
 fn DashboardHeader(props: DashboardHeaderProps) -> Element {
-    let navigator = use_navigator();
+    let _navigator = use_navigator();
     rsx! {
         div {
             class: "md:flex md:items-center md:justify-between py-8",
@@ -112,12 +105,12 @@ fn DashboardHeader(props: DashboardHeaderProps) -> Element {
                     class: "text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate flex items-center gap-3",
                     "Content Dashboard"
 
-                    if props.config.is_office_mode() {
+                    if props.is_office_mode {
                         span {
                             class: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800",
                             "Office Mode"
                         }
-                    } else if props.config.is_supabase_mode() {
+                    } else if props.is_supabase_mode {
                         span {
                             class: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800",
                             "Supabase Mode"
@@ -134,53 +127,6 @@ fn DashboardHeader(props: DashboardHeaderProps) -> Element {
             div {
                 class: "mt-4 flex md:mt-0 md:ml-4 space-x-3",
 
-                if props.config.is_office_mode() || props.config.is_sync_enabled() {
-                    button {
-                        onclick: props.on_sync,
-                        disabled: props.sync_result.read().is_none(),
-                        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed",
-
-                        if props.sync_result.read().is_none() {
-                            svg {
-                                class: "-ml-1 mr-2 h-5 w-5 text-gray-500 animate-spin",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-
-                                circle {
-                                    class: "opacity-25",
-                                    cx: "12",
-                                    cy: "12",
-                                    r: "10",
-                                    stroke: "currentColor",
-                                    "stroke-width": 4
-                                }
-
-                                path {
-                                    class: "opacity-75",
-                                    fill: "currentColor",
-                                    d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                }
-                            }
-                            "Syncing..."
-                        } else {
-                            svg {
-                                class: "-ml-1 mr-2 h-5 w-5 text-gray-500",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke: "currentColor",
-
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    "stroke-width": 2,
-                                    d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                }
-                            }
-                            "Sync"
-                        }
-                    }
-                }
-
                 button {
                     onclick: props.on_refresh,
                     class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
@@ -188,14 +134,13 @@ fn DashboardHeader(props: DashboardHeaderProps) -> Element {
                     svg {
                         class: "-ml-1 mr-2 h-5 w-5 text-gray-500",
                         fill: "none",
-                        view_box: "0 0 24 24",
                         stroke: "currentColor",
-
+                        view_box: "0 0 24 24",
                         path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            "stroke-width": 2,
-                            d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            "stroke-linecap": "round",
+                            "stroke-linejoin": "round",
+                            "stroke-width": "2",
+                            d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
                         }
                     }
                     "Refresh"
@@ -236,26 +181,24 @@ pub fn Dashboard() -> Element {
         }
     });
 
-    let config = get_config();
-    let content_service = ContentService::new();
-
     // let refresh_trigger: Signal<u64> = use_context::<Signal<u64>>();
+    let content_context: ContentContext = use_context();
     let mut contents = use_resource(move || {
-        let content_service = content_service.clone();
-        async move { content_service.get_all_content().await }
+        let content_context = content_context.clone();
+        async move { content_context.get_all_content().await }
     });
 
     let mut error_message = use_signal(|| None::<String>);
     let mut contents_data = use_signal(Vec::<Content>::new);
     let tag_context: TagContext = use_context();
-    let tags = use_resource(move || {
+    let mut tags = use_resource(move || {
         let tag_context = tag_context.clone();
         async move { tag_context.get_all_tags().await }
     });
-    let mut sync_result = use_resource(move || async move {
-        let mut sync_service = SyncService::new();
-        sync_service.sync_bidirectional().await
-    });
+
+    let mode = env!("APP_MODE");
+    let is_office_mode = mode == "office" || mode.is_empty();
+    let is_supabase_mode = mode == "supabase";
 
     use_effect(move || {
         if let Some(result) = contents.read().as_ref() {
@@ -273,10 +216,7 @@ pub fn Dashboard() -> Element {
 
     let handle_refresh = move |_| {
         contents.restart();
-    };
-
-    let handle_sync = move |_| {
-        sync_result.restart();
+        tags.restart();
     };
 
     rsx! {
@@ -284,29 +224,12 @@ pub fn Dashboard() -> Element {
         div {
             class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
             DashboardHeader {
-                config,
-                on_sync: handle_sync,
-                sync_result: sync_result,
+                is_office_mode,
+                is_supabase_mode,
                 on_refresh: handle_refresh,
             }
         }
 
-        // Sync status notification
-        if let Some(Ok(())) = sync_result.read().as_ref() {
-            NotificationCard {
-                variant: NotificationVariant::Success,
-                message: "Sync completed successfully".to_string(),
-                on_dismiss: move |_| sync_result.restart(),
-            }
-        }
-
-        if let Some(Err(err)) = sync_result.read().as_ref() {
-            NotificationCard {
-                variant: NotificationVariant::Error,
-                message: format!("Sync failed: {}", err),
-                on_dismiss: move |_| sync_result.restart(),
-            }
-        }
 
         // Stats cards
         div {

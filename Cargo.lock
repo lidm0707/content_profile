@@ -505,10 +505,13 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-logger 0.5.1",
+ "gloo-net",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "supabase_client",
  "tracing",
+ "web-sys",
 ]
 
 [[package]]
@@ -519,6 +522,7 @@ dependencies = [
  "base64",
  "chrono",
  "console_log",
+ "content_sdk",
  "dioxus",
  "dotenvy",
  "getrandom 0.2.17",

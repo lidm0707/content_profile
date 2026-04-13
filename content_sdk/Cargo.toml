@@ -22,6 +22,13 @@ anyhow = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# HTTP client for web
+gloo-net = { workspace = true }
+web-sys = { workspace = true }
+
+# Markdown processing
+pulldown-cmark = "0.13.3"
+
 # Supabase client for content management
 supabase_client = { path = "../supabase_client" }
 
@@ -29,3 +36,4 @@ supabase_client = { path = "../supabase_client" }
 default = ["web"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
+[build-dependencies]

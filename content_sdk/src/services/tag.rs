@@ -1,5 +1,5 @@
 use crate::models::{ContentTag, ContentTagRequest, Tag};
-use crate::utils::config::get_config;
+use crate::utils::config::Config;
 use dioxus::prelude::*;
 use supabase_client::{ClientConfig, create, delete, get};
 const TAGS_TABLE: &str = "tags";
@@ -11,9 +11,9 @@ pub struct TagService {
 }
 
 impl TagService {
-    pub fn new() -> Self {
+    pub fn new(config: Option<Config>) -> Self {
         TagService {
-            remote_service: SupabaseTagService::new(),
+            remote_service: SupabaseTagService::new(config),
         }
     }
 
@@ -96,30 +96,37 @@ impl TagService {
 
 impl Default for TagService {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 #[derive(Clone, PartialEq)]
-pub struct SupabaseTagService;
+pub struct SupabaseTagService {
+    config: Option<ClientConfig>,
+}
 
 impl SupabaseTagService {
-    pub fn new() -> Self {
-        SupabaseTagService
+    pub fn new(config: Option<Config>) -> Self {
+        let client_config = config.and_then(|c| {
+            let url = c.supabase_url?;
+            let anon_key = c.supabase_anon_key?;
+            Some(supabase_client::client_config(url, anon_key))
+        });
+
+        Self {
+            config: client_config,
+        }
     }
 
     pub async fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
-
-        get::<Tag>(&config, TAGS_TABLE, &[]).await
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        get::<Tag>(config, TAGS_TABLE, &[]).await
     }
 
     pub async fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
         let content_tags: Vec<ContentTag> = get(
-            &config,
+            config,
             CONTENT_TAGS_TABLE,
             &[("content_id", &content_id.to_string())],
         )
@@ -139,11 +146,10 @@ impl SupabaseTagService {
         &self,
         request: ContentTagRequest,
     ) -> Result<ContentTag, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
         let result =
-            create::<ContentTagRequest, ContentTag>(&config, CONTENT_TAGS_TABLE, &request).await?;
+            create::<ContentTagRequest, ContentTag>(config, CONTENT_TAGS_TABLE, &request).await?;
         result
             .into_iter()
             .next()
@@ -155,11 +161,10 @@ impl SupabaseTagService {
         content_id: i32,
         tag_id: i32,
     ) -> Result<(), String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
         let content_tags: Vec<ContentTag> = get(
-            &config,
+            config,
             CONTENT_TAGS_TABLE,
             &[
                 ("content_id", &content_id.to_string()),
@@ -170,7 +175,7 @@ impl SupabaseTagService {
 
         if let Some(content_tag) = content_tags.into_iter().next() {
             if let Some(id) = content_tag.id {
-                delete(&config, CONTENT_TAGS_TABLE, id).await
+                delete(config, CONTENT_TAGS_TABLE, id).await
             } else {
                 Err("ContentTag has no ID".to_string())
             }
@@ -180,8 +185,7 @@ impl SupabaseTagService {
     }
 
     pub async fn create_tag(&self, request: crate::models::TagRequest) -> Result<Tag, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
         let now = chrono::Utc::now();
         let tag = Tag {
@@ -194,7 +198,7 @@ impl SupabaseTagService {
             synced_at: None,
         };
 
-        let result = create::<Tag, Tag>(&config, TAGS_TABLE, &tag).await?;
+        let result = create::<Tag, Tag>(config, TAGS_TABLE, &tag).await?;
         result
             .into_iter()
             .next()
@@ -206,8 +210,7 @@ impl SupabaseTagService {
         id: i32,
         request: crate::models::TagRequest,
     ) -> Result<Tag, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
         let now = chrono::Utc::now();
         let tag = Tag {
@@ -220,7 +223,7 @@ impl SupabaseTagService {
             synced_at: None,
         };
 
-        let result = supabase_client::update::<Tag, Tag>(&config, TAGS_TABLE, id, &tag).await?;
+        let result = supabase_client::update::<Tag, Tag>(config, TAGS_TABLE, id, &tag).await?;
         result
             .into_iter()
             .next()
@@ -228,33 +231,14 @@ impl SupabaseTagService {
     }
 
     pub async fn delete_tag(&self, id: i32) -> Result<(), String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
-
-        delete(&config, TAGS_TABLE, id).await
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        delete(config, TAGS_TABLE, id).await
     }
 
     pub async fn get_tag_by_id(&self, id: i32) -> Result<Option<Tag>, String> {
-        let app_config = get_config();
-        let config = build_client_config(&app_config)?;
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
-        let tags: Vec<Tag> = get(&config, TAGS_TABLE, &[("id", &id.to_string())]).await?;
+        let tags: Vec<Tag> = get(config, TAGS_TABLE, &[("id", &id.to_string())]).await?;
         Ok(tags.into_iter().next())
     }
-}
-
-fn build_client_config(app_config: &crate::utils::config::Config) -> Result<ClientConfig, String> {
-    let supabase_url = app_config
-        .supabase_url
-        .as_ref()
-        .ok_or_else(|| "SUPABASE_URL must be set".to_string())?;
-    let supabase_anon_key = app_config
-        .supabase_anon_key
-        .as_ref()
-        .ok_or_else(|| "SUPABASE_ANON_KEY must be set".to_string())?;
-
-    Ok(supabase_client::client_config(
-        supabase_url.clone(),
-        supabase_anon_key.clone(),
-    ))
 }

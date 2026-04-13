@@ -1,5 +1,5 @@
-use crate::models::Content;
 use crate::routes::Route;
+use content_sdk::models::Content;
 use dioxus::prelude::*;
 use tracing::debug;
 

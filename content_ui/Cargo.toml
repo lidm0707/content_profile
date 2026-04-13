@@ -15,6 +15,9 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 
+# Content SDK
+content_sdk = { path = "../content_sdk" }
+
 # Supabase client dependency
 supabase_client = { path = "../supabase_client" }
 

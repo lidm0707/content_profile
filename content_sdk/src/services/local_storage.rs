@@ -204,7 +204,7 @@ impl LocalStorageService {
             if let Ok(json) = serde_json::to_string(&*contents) {
                 let _ = storage.set_item("cms_content", &json);
             }
-            let next_id = self.next_id;
+            let next_id = self.next_id.read();
             let _ = storage.set_item("cms_next_id", &next_id.to_string());
         }
     }
@@ -213,8 +213,8 @@ impl LocalStorageService {
     fn load_from_persistence(&mut self) {
         if let Some(window) = web_sys::window()
             && let Ok(Some(storage)) = window.local_storage()
-            && let Ok(Some(json)) = storage.get_item("cms_content")
-            && let Ok(loaded) = serde_json::from_str::<Vec<Content>>(&json)
+            && let Ok(Some(json_string)) = storage.get_item("cms_content")
+            && let Ok(loaded) = serde_json::from_str::<Vec<Content>>(&json_string)
         {
             let mut contents = self.contents.write();
             *contents = loaded;

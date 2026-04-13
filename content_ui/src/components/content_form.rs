@@ -1,6 +1,6 @@
-use crate::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
-use crate::utils::markdown::update_tags_in_frontmatter;
-use crate::utils::{
+use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
+use content_sdk::utils::markdown::update_tags_in_frontmatter;
+use content_sdk::utils::{
     format_blockquote, format_bold, format_code, format_code_block, format_heading, format_image,
     format_italic, format_link, format_ordered_list, format_unordered_list,
     render_markdown_to_html,

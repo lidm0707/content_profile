@@ -41,7 +41,7 @@
 //! let content = UseContent::with_table(config(), "custom_content".to_string());
 //! ```
 
-use crate::models::{Content, ContentStatus};
+use crate::models::Content;
 use dioxus::prelude::*;
 use supabase_client::{ClientConfig, get};
 use tracing::{debug, error, info};
@@ -57,11 +57,10 @@ pub struct UseContent {
     /// Resource for fetching content
     resource: Resource<Result<Vec<Content>, String>>,
     /// Signal for filtering by status
-    filter_status: Signal<Option<ContentStatus>>,
+    filter_status: Signal<Option<String>>,
     /// Signal for filtering by tag IDs
     filter_tags: Signal<Option<Vec<i32>>>,
-    /// Signal for filtering by content type
-    filter_content_type: Signal<Option<String>>,
+
     /// Signal for search query
     search_query: Signal<Option<String>>,
     /// Supabase client config
@@ -105,7 +104,6 @@ impl UseContent {
             resource,
             filter_status: use_signal(|| None),
             filter_tags: use_signal(|| None),
-            filter_content_type: use_signal(|| None),
             search_query: use_signal(|| None),
             config,
             table,
@@ -129,14 +127,14 @@ impl UseContent {
     }
 
     /// Sets status filter
-    pub fn set_status_filter(&mut self, status: Option<ContentStatus>) {
+    pub fn set_status_filter(&mut self, status: Option<String>) {
         info!("Setting status filter: {:?}", status);
         *self.filter_status.write() = status;
     }
 
     /// Gets current status filter
-    pub fn get_status_filter(&self) -> Option<ContentStatus> {
-        *self.filter_status.read()
+    pub fn get_status_filter(&self) -> Option<String> {
+        self.filter_status.read().clone()
     }
 
     /// Sets tag filter
@@ -148,17 +146,6 @@ impl UseContent {
     /// Gets current tag filter
     pub fn get_tag_filter(&self) -> Option<Vec<i32>> {
         self.filter_tags.read().as_ref().cloned()
-    }
-
-    /// Sets content type filter
-    pub fn set_content_type_filter(&mut self, content_type: Option<String>) {
-        info!("Setting content type filter: {:?}", content_type);
-        *self.filter_content_type.write() = content_type;
-    }
-
-    /// Gets current content type filter
-    pub fn get_content_type_filter(&self) -> Option<String> {
-        self.filter_content_type.read().as_ref().cloned()
     }
 
     /// Sets search query
@@ -182,10 +169,10 @@ impl UseContent {
                 let mut filtered = items;
 
                 // Filter by status
-                if let Some(status) = *self.filter_status.read() {
+                if let Some(status) = self.filter_status.read().as_ref() {
                     filtered = filtered
                         .into_iter()
-                        .filter(|c| c.get_status() == Some(status))
+                        .filter(|c| c.status == *status)
                         .collect();
                 }
 
@@ -203,14 +190,6 @@ impl UseContent {
                     }
                 }
 
-                // Filter by content type
-                if let Some(content_type) = self.filter_content_type.read().as_ref() {
-                    filtered = filtered
-                        .into_iter()
-                        .filter(|c| c.content_type.as_ref() == Some(content_type))
-                        .collect();
-                }
-
                 // Filter by search query
                 if let Some(query) = self.search_query.read().as_ref() {
                     let query_lower = query.to_lowercase();
@@ -219,9 +198,6 @@ impl UseContent {
                         .filter(|c| {
                             c.title.to_lowercase().contains(&query_lower)
                                 || c.body.to_lowercase().contains(&query_lower)
-                                || c.excerpt
-                                    .as_ref()
-                                    .map_or(false, |e| e.to_lowercase().contains(&query_lower))
                         })
                         .collect();
                 }

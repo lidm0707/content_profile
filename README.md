@@ -14,69 +14,87 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 - **Loading States**: Smooth loading indicators for async operations
 - **Error Handling**: Comprehensive error handling and user feedback
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
+- **Modular Architecture**: Clean separation between SDK and UI layers
 
 ## 🛠 Technology Stack
 
 - **Frontend**: Dioxus 0.7 (Rust-based reactive UI framework)
 - **Backend**: Supabase (PostgreSQL + REST API + Real-time)
-- **Styling**: Tailwind CSS (Utility-first CSS framework)
+- **SDK**: Custom Rust SDK with business logic and models
+- **Styling**: Tailwind CSS v4 (Utility-first CSS framework)
 - **HTTP Client**: Reqwest (Async HTTP client for Rust)
 - **Serialization**: Serde (Serialization/deserialization framework)
 - **Date/Time**: Chrono (Date and time library)
+- **Authentication**: Supabase Auth with JWT tokens
 
 ## 📁 Project Structure
 
 ```
 content_profile/
-├─ assets/                     # Static assets (images, CSS, etc.)
-│  ├─ favicon.ico             # Application favicon
-│  ├─ main.css                 # Custom styles
-│  └─ tailwind.css             # Tailwind CSS
-├─ src/
-│  ├─ main.rs                  # Application entry point
-│  ├─ app.rs                   # Root App component
-│  ├─ routes.rs                # Route definitions
-│  ├─ models/                  # Data models
-│  │  ├─ mod.rs               # Models module
-│  │  ├─ content.rs           # Content model and requests
-│  │  ├─ tag.rs               # Tag model and requests
-│  │  └─ content_tag.rs       # Content-tag relationship model
-│  ├─ components/              # Reusable components
-│  │  ├─ mod.rs               # Components module
-│  │  ├─ navbar.rs            # Navigation bar
-│  │  ├─ content_form.rs      # Content creation/editing form
-│  │  ├─ content_list.rs      # List of content items
-│  │  └─ content_detail.rs    # Detailed content view
-│  ├─ pages/                   # Page components
-│  │  ├─ mod.rs               # Pages module
-│  │  ├─ home.rs              # Home/landing page
-│  │  ├─ dashboard.rs         # Content management dashboard
-│  │  ├─ content_edit.rs      # Content edit/create page
-│  │  ├─ content_list.rs      # Content list page with tag filtering
-│  │  ├─ login.rs             # Login page
-│  │  ├─ tags_edit.rs          # Tag creation/editing page
-│  │  └─ tags_list.rs          # Tags list page
-│  ├─ services/                # External services
-│  │  ├─ mod.rs               # Services module
-│  │  ├─ supabase.rs          # Supabase client and operations
-│  │  ├─ auth.rs              # Authentication service
-│  │  ├─ content.rs           # Content service
-│  │  ├─ tag.rs               # Tag service
-│  │  ├─ sync.rs              # Sync service
-│  │  ├─ local_storage.rs     # Local storage service
-│  │  └─ session.rs           # Session storage service
-│  ├─ contexts/               # Reactive state contexts
-│  │  ├─ mod.rs               # Contexts module
-│  │  ├─ user_context.rs      # User authentication context
-│  │  ├─ content_context.rs   # Content management context
-│  │  └─ tag_context.rs       # Tag management context
-│  └─ utils/                   # Utility functions
-│     ├─ mod.rs               # Utils module
-│     └─ config.rs            # Configuration management
-├─ Cargo.toml                  # Dependencies and project metadata
-├─ Dioxus.toml                 # Dioxus configuration
-├─ .env.example               # Environment variables template
-├─ supabase_schema.sql        # Database schema for Supabase
+├─ content_sdk/                # SDK library (reusable business logic)
+│  ├─ src/
+│  │  ├─ models/              # Data models and requests
+│  │  │  ├─ mod.rs           # Models module
+│  │  │  ├─ content.rs       # Content model and requests
+│  │  │  ├─ tag.rs           # Tag model and requests
+│  │  │  ├─ content_tag.rs   # Content-tag relationship model
+│  │  │  └─ auth.rs          # Authentication models
+│  │  ├─ services/            # Business logic services
+│  │  │  ├─ mod.rs           # Services module
+│  │  │  ├─ auth.rs          # Authentication service
+│  │  │  ├─ content.rs       # Content service
+│  │  │  ├─ tag.rs           # Tag service
+│  │  │  ├─ supabase.rs      # Supabase client
+│  │  │  ├─ local_storage.rs # Local storage service
+│  │  │  └─ session.rs       # Session storage service
+│  │  ├─ utils/               # Utilities
+│  │  │  ├─ mod.rs           # Utils module
+│  │  │  ├─ config.rs        # Configuration management
+│  │  │  └─ markdown.rs      # Markdown processing utilities
+│  │  ├─ hooks/              # Custom React-like hooks
+│  │  │  ├─ mod.rs           # Hooks module
+│  │  │  ├─ use_content.rs   # Content management hook
+│  │  │  └─ use_tags.rs      # Tags management hook
+│  │  └─ lib.rs              # SDK library entry point
+│  └─ Cargo.toml              # SDK dependencies
+├─ content_ui/                # UI application (Dioxus frontend)
+│  ├─ assets/               # Static assets (images, CSS, etc.)
+│  │  ├─ favicon.ico         # Application favicon
+│  │  ├─ tailwind.css       # Tailwind CSS v4
+│  │  └─ main.css           # Custom styles
+│  ├─ src/
+│  │  ├─ main.rs             # Application entry point
+│  │  ├─ app.rs              # Root App component
+│  │  ├─ routes.rs           # Route definitions
+│  │  ├─ components/          # Reusable components
+│  │  │  ├─ mod.rs           # Components module
+│  │  │  ├─ navbar.rs        # Navigation bar
+│  │  │  ├─ content_form.rs  # Content creation/editing form
+│  │  │  ├─ content_list.rs  # List of content items
+│  │  │  ├─ content_detail.rs # Detailed content view
+│  │  │  ├─ stat_card.rs      # Statistics card component
+│  │  │  └─ notification_card.rs # Notification component
+│  │  ├─ pages/              # Page components
+│  │  │  ├─ mod.rs           # Pages module
+│  │  │  ├─ dashboard.rs      # Content management dashboard
+│  │  │  ├─ content_edit.rs   # Content edit/create page
+│  │  │  ├─ content_list.rs   # Content list page with tag filtering
+│  │  │  ├─ login.rs          # Login page
+│  │  │  ├─ tags_edit.rs     # Tag creation/editing page
+│  │  │  └─ tags_list.rs     # Tags list page
+│  │  ├─ contexts/            # Reactive state contexts
+│  │  │  ├─ mod.rs           # Contexts module
+│  │  │  ├─ user_context.rs  # User authentication context
+│  │  │  ├─ content_context.rs # Content management context
+│  │  │  └─ tag_context.rs  # Tag management context
+│  │  └─ routes.rs           # Route definitions
+│  ├─ Cargo.toml              # UI dependencies
+│  ├─ build.rs                # Build script for environment variables
+│  └─ Dioxus.toml            # Dioxus configuration
+├─ supabase_client/            # Supabase client library
+│  └─ Cargo.toml              # Supabase dependencies
+├─ .env.example                # Environment variables template
+├─ supabase_schema.sql         # Database schema for Supabase
 └─ README.md                  # This file
 ```
 
@@ -516,6 +534,8 @@ For issues, questions, or contributions:
 - [ ] Multi-language support
 - [ ] Content scheduling
 - [ ] SEO optimization features
+- [ ] Offline mode support
+- [ ] Data synchronization with remote server
 
 ### Performance Improvements
 
@@ -523,6 +543,7 @@ For issues, questions, or contributions:
 - [ ] Optimize database queries
 - [ ] Add pagination for content lists
 - [ ] Implement lazy loading for images
+- [ ] Optimize WASM bundle size
 
 ### Developer Experience
 
@@ -531,6 +552,8 @@ For issues, questions, or contributions:
 - [ ] Set up CI/CD pipeline
 - [ ] Add API documentation
 - [ ] Create example templates
+- [ ] Add storybook for components
+- [ ] Improve error messages
 
 ---
 

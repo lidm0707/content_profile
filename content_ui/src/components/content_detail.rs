@@ -1,7 +1,7 @@
 use crate::contexts::{ContentContext, TagContext};
-use crate::models::{Content, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use crate::routes::Route;
-use crate::utils::render_markdown_to_html;
+use content_sdk::models::{Content, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
+use content_sdk::utils::render_markdown_to_html;
 use dioxus::prelude::*;
 
 /// Props for the tag button component
@@ -25,7 +25,7 @@ fn TagButton(props: TagButtonProps) -> Element {
                 let mut tag_context = tag_context.clone();
                 spawn(async move {
                     let _ = tag_context.add_tag_to_content(
-                        crate::models::ContentTagRequest {
+                        content_sdk::models::ContentTagRequest {
                             content_id,
                             tag_id,
                         }

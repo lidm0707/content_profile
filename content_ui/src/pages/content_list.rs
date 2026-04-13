@@ -1,7 +1,7 @@
 use crate::components::ContentList as ContentListComponent;
 use crate::contexts::{ContentContext, TagContext};
-use crate::models::Content;
 use crate::routes::Route;
+use content_sdk::models::Content;
 use dioxus::prelude::*;
 
 /// Props for the content list page

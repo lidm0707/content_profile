@@ -1,5 +1,6 @@
-use crate::models::{ContentTag, ContentTagRequest, Tag};
-use crate::services::TagService;
+use content_sdk::models::{ContentTag, ContentTagRequest, Tag};
+use content_sdk::services::TagService;
+use content_sdk::utils::config::Config;
 use dioxus::prelude::*;
 /// Tag context for managing tag state across the app
 #[derive(Clone, PartialEq, Props)]
@@ -9,9 +10,9 @@ pub struct TagContext {
 
 impl TagContext {
     /// Creates a new TagContext
-    pub fn new() -> Self {
+    pub fn new(config: Option<Config>) -> Self {
         TagContext {
-            tag_service: Signal::new(TagService::new()),
+            tag_service: Signal::new(TagService::new(config)),
         }
     }
 
@@ -22,15 +23,14 @@ impl TagContext {
 
     /// Fetches all tags
     pub async fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        self.tag_service.read().get_all_tags().await
+        let service = self.tag_service.cloned();
+        service.get_all_tags().await
     }
 
     /// Fetches tags for a specific content item
     pub async fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
-        self.tag_service
-            .read()
-            .get_tags_for_content(content_id)
-            .await
+        let service = self.tag_service.cloned();
+        service.get_tags_for_content(content_id).await
     }
 
     /// Adds a tag to a content item
@@ -38,7 +38,8 @@ impl TagContext {
         &mut self,
         request: ContentTagRequest,
     ) -> Result<ContentTag, String> {
-        self.tag_service.write().add_tag_to_content(request).await
+        let mut service = self.tag_service.cloned();
+        service.add_tag_to_content(request).await
     }
 
     /// Removes a tag from a content item
@@ -47,10 +48,8 @@ impl TagContext {
         content_id: i32,
         tag_id: i32,
     ) -> Result<(), String> {
-        self.tag_service
-            .write()
-            .remove_tag_from_content(content_id, tag_id)
-            .await
+        let mut service = self.tag_service.cloned();
+        service.remove_tag_from_content(content_id, tag_id).await
     }
 
     /// Updates the tags for a content item (replaces all tags)
@@ -59,15 +58,13 @@ impl TagContext {
         content_id: i32,
         tag_ids: Vec<i32>,
     ) -> Result<(), String> {
-        self.tag_service
-            .write()
-            .update_content_tags(content_id, tag_ids)
-            .await
+        let mut service = self.tag_service.cloned();
+        service.update_content_tags(content_id, tag_ids).await
     }
 }
 
 impl Default for TagContext {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

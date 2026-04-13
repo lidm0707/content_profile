@@ -1,6 +1,6 @@
 use crate::models::{Content, ContentRequest};
 use crate::services::{LocalStorageService, SupabaseService};
-use crate::utils::config::{AppMode, get_config};
+use crate::utils::config::{AppMode, Config};
 use dioxus::prelude::*;
 use tracing::{debug, info, trace};
 
@@ -13,14 +13,14 @@ pub struct ContentService {
 }
 
 impl ContentService {
-    pub fn new() -> Self {
-        let config = get_config();
-        info!("ContentService initialized with mode: {:?}", config.mode);
+    pub fn new(config: Option<Config>) -> Self {
+        let mode = config.as_ref().map(|c| c.mode).unwrap_or(AppMode::Office);
+        info!("ContentService initialized with mode: {:?}", mode);
 
         ContentService {
             local_service: LocalStorageService::new(),
-            remote_service: SupabaseService::new(),
-            mode: config.mode,
+            remote_service: SupabaseService::new(config),
+            mode,
         }
     }
 
@@ -141,6 +141,6 @@ impl ContentService {
 
 impl Default for ContentService {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }

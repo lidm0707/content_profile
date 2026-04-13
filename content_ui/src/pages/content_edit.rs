@@ -1,7 +1,7 @@
 use crate::components::ContentForm;
-use crate::models::{Content, ContentRequest, Tag};
+use crate::contexts::{ContentContext, TagContext};
 use crate::routes::Route;
-use crate::services::{ContentService, TagService};
+use content_sdk::models::{Content, ContentRequest, Tag};
 use dioxus::prelude::*;
 use tracing::{debug, info, warn};
 
@@ -11,15 +11,16 @@ pub fn ContentEdit(id: i32) -> Element {
     let navigate = use_navigator();
     let is_editing = id != 0;
     let mut refresh_trigger = use_context::<Signal<u64>>();
+    let content_context = use_context::<ContentContext>();
+    let tag_context = use_context::<TagContext>();
 
-    let content_service = ContentService::new();
-    let content_service_clone = content_service.clone();
-    let tag_service = TagService::new();
-    let tag_service_clone = tag_service.clone();
+    // Clone contexts for use in resource closures
+    let content_context_for_content_resource = content_context.clone();
+    let tag_context_for_tags_resource = tag_context.clone();
 
     // Resource to fetch content if editing
     let content_resource = use_resource(move || {
-        let content_service = content_service_clone.clone();
+        let content_context = content_context_for_content_resource.clone();
         async move {
             debug!(
                 "Loading content resource - is_editing: {}, id: {}",
@@ -27,7 +28,7 @@ pub fn ContentEdit(id: i32) -> Element {
             );
             if is_editing {
                 info!("Fetching content by ID: {}", id);
-                let result = content_service.get_content_by_id(id).await;
+                let result = content_context.get_content_by_id(id).await;
                 match &result {
                     Ok(Some(content)) => debug!("Successfully loaded content: {}", content.title),
                     Ok(None) => warn!("Content not found with ID: {}", id),
@@ -48,8 +49,8 @@ pub fn ContentEdit(id: i32) -> Element {
     let mut error_message = use_signal(|| None::<String>);
 
     let tags_resource: Resource<Result<Vec<Tag>, String>> = use_resource(move || {
-        let tag_service = tag_service_clone.clone();
-        async move { tag_service.get_all_tags().await }
+        let tag_context = tag_context_for_tags_resource.clone();
+        async move { tag_context.get_all_tags().await }
     });
 
     let mut available_tags = use_signal(Vec::<Tag>::new);
@@ -119,26 +120,26 @@ pub fn ContentEdit(id: i32) -> Element {
 
         let _current_content_for_spawn = current_content.read().clone();
         let navigate_for_spawn = navigate;
-        let mut content_service_for_spawn = content_service.clone();
-        let mut tag_service_for_spawn = tag_service.clone();
+        let mut content_context_for_spawn = content_context.clone();
+        let mut tag_context_for_spawn = tag_context.clone();
         let request_tags = request.tags.clone().unwrap_or_default();
 
         // Spawn an async task to handle the submission
         async move {
             let result = if let Some(id) = request.id {
-                content_service_for_spawn.update_content(id, request).await
+                content_context_for_spawn.update_content(id, request).await
             } else {
                 let request = ContentRequest {
                     id: None,
                     ..request
                 };
-                content_service_for_spawn.create_content(request).await
+                content_context_for_spawn.create_content(request).await
             };
 
             match result {
                 Ok(content) => {
                     let content_id = content.id.unwrap();
-                    let _ = tag_service_for_spawn
+                    let _ = tag_context_for_spawn
                         .update_content_tags(content_id, request_tags)
                         .await;
 
