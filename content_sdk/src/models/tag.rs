@@ -5,7 +5,10 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Props)]
 pub struct Tag {
-    #[serde(deserialize_with = "deserialize_option_string_or_int")]
+    #[serde(
+        deserialize_with = "deserialize_option_string_or_int",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub id: Option<i32>,
     pub name: String,
     pub slug: String,
