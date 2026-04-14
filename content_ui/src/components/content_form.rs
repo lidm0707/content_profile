@@ -10,7 +10,7 @@ use content_sdk::utils::{
 use dioxus::prelude::*;
 use tracing::debug;
 
-/// Props for the content form component
+/// Props for content form component
 #[derive(Clone, PartialEq, Props)]
 pub struct ContentFormProps {
     /// Optional content for editing (None for creating new content)
@@ -19,6 +19,507 @@ pub struct ContentFormProps {
     pub on_submit: EventHandler<(ContentRequest, Vec<i32>)>,
     /// Callback when form is cancelled
     pub on_cancel: EventHandler<()>,
+}
+
+/// Component for edit mode with toolbar and textarea
+#[component]
+fn EditModeBodyEditor(
+    body: Signal<String>,
+    is_submitting: Signal<bool>,
+    handle_format_bold: EventHandler<MouseEvent>,
+    handle_format_italic: EventHandler<MouseEvent>,
+    handle_format_heading: EventHandler<MouseEvent>,
+    handle_format_link: EventHandler<MouseEvent>,
+    handle_format_image: EventHandler<MouseEvent>,
+    handle_format_code: EventHandler<MouseEvent>,
+    handle_format_code_block: EventHandler<MouseEvent>,
+    handle_format_unordered_list: EventHandler<MouseEvent>,
+    handle_format_ordered_list: EventHandler<MouseEvent>,
+    handle_format_blockquote: EventHandler<MouseEvent>,
+) -> Element {
+    rsx! {
+        div {
+            class: "mb-2 border border-gray-300 rounded-t-md bg-gray-50 p-2 flex flex-wrap gap-1",
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_bold,
+                disabled: *is_submitting.read(),
+                title: "Bold",
+                "B"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_italic,
+                disabled: *is_submitting.read(),
+                title: "Italic",
+                "I"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_heading,
+                disabled: *is_submitting.read(),
+                title: "Heading",
+                "H2"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_link,
+                disabled: *is_submitting.read(),
+                title: "Link",
+                "🔗"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_image,
+                disabled: *is_submitting.read(),
+                title: "Image",
+                "🖼️"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_code,
+                disabled: *is_submitting.read(),
+                title: "Inline Code",
+                "</>"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_code_block,
+                disabled: *is_submitting.read(),
+                title: "Code Block",
+                "Code"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_unordered_list,
+                disabled: *is_submitting.read(),
+                title: "Bullet List",
+                "•"
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_ordered_list,
+                disabled: *is_submitting.read(),
+                title: "Numbered List",
+                "1."
+            }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_blockquote,
+                disabled: *is_submitting.read(),
+                title: "Blockquote",
+                "Quote"
+            }
+        }
+        textarea {
+            value: "{body}",
+            class: "mt-0 block w-full border border-gray-300 border-t-0 rounded-b-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono",
+            rows: 8,
+            oninput: move |e: Event<FormData>| {
+                *body.write() = e.value();
+            },
+            disabled: *is_submitting.read()
+        }
+    }
+}
+
+/// Component for preview mode showing rendered markdown
+#[component]
+fn PreviewModeBodyEditor(body: Signal<String>) -> Element {
+    rsx! {
+        div {
+            class: "mt-0 block w-full border border-gray-300 rounded-md shadow-sm py-3 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm min-h-[200px] bg-gray-50",
+            if body.read().trim().is_empty() {
+                p {
+                    class: "text-gray-400 italic",
+                    "No content to preview"
+                }
+
+            } else {
+                div {
+                    class: "prose prose-sm max-w-none",
+                    dangerous_inner_html: render_markdown_to_html(&body.read()),
+                }
+            }
+        }
+    }
+}
+
+/// Tags field component for managing content tags
+#[component]
+fn TagsField(
+    selected_tag_ids: Signal<Vec<i32>>,
+    is_submitting: Signal<bool>,
+    tag_to_remove: Signal<Option<(i32, String)>>,
+    show_clear_all_confirmation: Signal<bool>,
+    tags_loading: ReadSignal<bool>,
+    tag_badges: ReadSignal<Vec<(i32, Tag)>>,
+    available_tags: ReadSignal<Vec<Tag>>,
+    show_tag_selector: Signal<bool>,
+    available_tags_to_show: ReadSignal<Vec<Tag>>,
+) -> Element {
+    rsx! {
+        div {
+            div {
+                "Tags"
+            }
+
+            div {
+                class: "flex flex-wrap gap-2 mb-3 relative z-10",
+
+                if *tags_loading.read() {
+                    span {
+                        class: "text-sm text-gray-500",
+                        "Loading tags..."
+                    }
+                } else if tag_badges.read().is_empty() {
+                    span {
+                        class: "text-sm text-gray-500",
+                        "No tags selected"
+                    }
+                } else {
+                    for (tag_id, tag) in tag_badges.read().iter().cloned() {
+                        div {
+                            class: "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group",
+
+                            span {
+                                class: "mr-1",
+                                "{tag.name}"
+                            }
+                            button {
+                                r#type: "button",
+                                class: "ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150",
+                                onclick: move |_| {
+                                    tag_to_remove.set(Some((tag_id, tag.name.clone())));
+                                },
+                                disabled: false,
+                                //*is_submitting.read()
+                                title: "Remove tag",
+
+                                svg {
+                                    class: "w-3 h-3",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    stroke: "currentColor",
+
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        "stroke-width": 2,
+                                        d: "M6 18L18 6M6 6l12 12"
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if !tag_badges.read().is_empty() {
+                        button {
+                            r#type: "button",
+                            class: "inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors duration-150",
+                            onclick: move |_| {
+                                show_clear_all_confirmation.set(true);
+                            },
+                            disabled: false,
+                            //*is_submitting.read()
+                            svg {
+                                class: "w-4 h-4 mr-1",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                stroke: "currentColor",
+
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    "stroke-width": 2,
+                                    d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                }
+                            }
+                            "{show_clear_all_confirmation()}"
+                            "Clear All"
+                        }
+                    }
+                }
+            }
+
+            button {
+                r#type: "button",
+                class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                onclick: move |_| {
+                    *show_tag_selector.write() = !show_tag_selector();
+                },
+                disabled: *is_submitting.read() || available_tags.read().is_empty(),
+
+                svg {
+                    class: "-ml-0.5 mr-2 h-4 w-4 text-gray-500",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    stroke: "currentColor",
+
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        "stroke-width": 2,
+                        d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    }
+                }
+
+                "Add Tag"
+            }
+
+            if *show_tag_selector.read() {
+                div {
+                    class: "mt-3 p-3 border border-gray-200 rounded-md bg-gray-50",
+
+                    div {
+                        class: "max-h-48 overflow-y-auto space-y-1",
+                        for tag in available_tags_to_show().iter().cloned() {
+                            button {
+                                r#type: "button",
+                                class: "w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                                onclick: move |_| {
+                                    let mut ids = selected_tag_ids.write();
+                                    ids.push(tag.id.unwrap());
+                                    *show_tag_selector.write() = false;
+                                },
+                                disabled: *is_submitting.read(),
+                                "{tag.name}"
+                            }
+                        }
+                    }
+
+                    button {
+                        r#type: "button",
+                        class: "mt-2 text-sm text-gray-500 hover:text-gray-700",
+                        onclick: move |_| {
+                            *show_tag_selector.write() = false;
+                        },
+
+                        "Cancel"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Confirmation modal for removing a single tag
+#[component]
+fn RemoveTagConfirmationModal(
+    tag_id: i32,
+    tag_name: String,
+    tag_to_remove: Signal<Option<(i32, String)>>,
+    selected_tag_ids: Signal<Vec<i32>>,
+    is_submitting: ReadSignal<bool>,
+) -> Element {
+    rsx! {
+    div {
+        class: "fixed inset-0 z-50 overflow-y-auto",
+        div {
+            class: "flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0",
+
+            div {
+                class: "fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40",
+                onclick: move |_| {
+                    tag_to_remove.set(None);
+                }
+            }
+
+            span {
+                class: "hidden sm:inline-block sm:align-middle sm:h-screen",
+                "​"
+            }
+
+            div {
+                class: "inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50",
+
+                div {
+                    class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
+
+                    div {
+                        class: "sm:flex sm:items-start",
+
+                        div {
+                            class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
+
+                            svg {
+                                class: "h-6 w-6 text-red-600",
+                                fill: "none",
+                                view_box: "0 0 24 24",
+                                stroke: "currentColor",
+
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    stroke_width: 2,
+                                    d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                }
+                            }
+                        }
+
+                        div {
+                            class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
+
+                            h3 {
+                                class: "text-lg leading-6 font-medium text-gray-900",
+                                "Remove Tag"
+                            }
+
+                            div {
+                                class: "mt-2",
+
+                                p {
+                                    class: "text-sm text-gray-500",
+                                    "Are you sure you want to remove the tag \"{tag_name}\"? This action can be undone by adding the tag back."
+                                }
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
+
+                    button {
+                        r#type: "button",
+                        class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm",
+                        onclick: move |_| {
+                            let mut ids = selected_tag_ids.write();
+                            ids.retain(|id| *id != tag_id);
+                            tag_to_remove.set(None);
+                        },
+
+                        "Remove"
+                    }
+
+                    button {
+                        r#type: "button",
+                        class: "mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm",
+                        onclick: move |_| {
+                            tag_to_remove.set(None);
+                        },
+
+                        "Cancel"
+                    }
+                }
+            }
+        }
+    }
+    }
+}
+
+/// Confirmation modal for clearing all tags
+#[component]
+fn ClearAllTagsConfirmationModal(
+    show_clear_all_confirmation: Signal<bool>,
+    selected_tag_ids: Signal<Vec<i32>>,
+    tag_badges: ReadSignal<Vec<(i32, Tag)>>,
+    isSubmitting: ReadSignal<bool>,
+) -> Element {
+    rsx! {
+        div {
+            class: "fixed inset-0 z-50 overflow-y-auto",
+            div {
+                class: "flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0",
+
+                div {
+                    class: "fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40",
+                    onclick: move |_| {
+                        show_clear_all_confirmation.set(false);
+                    }
+                }
+
+                span {
+                    class: "hidden sm:inline-block sm:align-middle sm:h-screen",
+                    "​"
+                }
+
+                div {
+                    class: "inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50",
+
+                    div {
+                        class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
+
+                        div {
+                            class: "sm:flex sm:items-start",
+
+                            div {
+                                class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
+
+                                svg {
+                                    class: "h-6 w-6 text-red-600",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    stroke: "currentColor",
+
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        stroke_width: 2,
+                                        d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                    }
+                                }
+                            }
+
+                            div {
+                                class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
+
+                                h3 {
+                                    class: "text-lg leading-6 font-medium text-gray-900",
+                                    {"Clear All Tags"}
+                                }
+
+                                div {
+                                    class: "mt-2",
+
+                                    p {
+                                        class: "text-sm text-gray-500",
+                                        {"Are you sure you want to remove all ".to_string() + &tag_badges.read().len().to_string() + " tag(s)? This action can be undone by adding tags back."}
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    div {
+                        class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
+
+                        button {
+                            r#type: "button",
+                            class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm",
+                            onclick: move |_| {
+                                selected_tag_ids.set(Vec::new());
+                                show_clear_all_confirmation.set(false);
+                            },
+                            disabled: *isSubmitting.read(),
+
+                            "Clear All"
+                        }
+
+                        button {
+                            r#type: "button",
+                            class: "mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm",
+                            onclick: move |_| {
+                                show_clear_all_confirmation.set(false);
+                            },
+
+                            "Cancel"
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Content form component for creating and editing content
@@ -67,6 +568,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut isSubmitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
+    let mut tag_to_remove = use_signal(|| None::<(i32, String)>);
+    let mut show_clear_all_confirmation = use_signal(|| false);
 
     // Fetch available_tags using resource
     let available_tags_resource = use_resource(move || {
@@ -174,7 +677,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     };
 
     use_effect(move || {
-        if let Some(content) = props.content.as_ref() {
+        if let Some(content) = props.content.read().as_ref() {
             title.set(content.title.clone());
             slug.set(content.slug.clone());
             body.set(content.body.clone());
@@ -447,243 +950,37 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
                             // Formatting toolbar (only shown in edit mode)
                             if !*isPreviewMode.read() {
-
-                            // Formatting toolbar
-                            div {
-                                class: "mb-2 border border-gray-300 rounded-t-md bg-gray-50 p-2 flex flex-wrap gap-1",
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_bold,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Bold",
-                                    "B"
+                                EditModeBodyEditor {
+                                    body: body.clone(),
+                                    is_submitting: isSubmitting.clone(),
+                                    handle_format_bold: handle_format_bold,
+                                    handle_format_italic: handle_format_italic,
+                                    handle_format_heading: handle_format_heading,
+                                    handle_format_link: handle_format_link,
+                                    handle_format_image: handle_format_image,
+                                    handle_format_code: handle_format_code,
+                                    handle_format_code_block: handle_format_code_block,
+                                    handle_format_unordered_list: handle_format_unordered_list,
+                                    handle_format_ordered_list: handle_format_ordered_list,
+                                    handle_format_blockquote: handle_format_blockquote,
                                 }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_italic,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Italic",
-                                    "I"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_heading,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Heading",
-                                    "H2"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_link,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Link",
-                                    "🔗"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_image,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Image",
-                                    "🖼️"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_code,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Inline Code",
-                                    "&lt;/&gt;"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_code_block,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Code Block",
-                                    "Code"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_unordered_list,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Bullet List",
-                                    "•"
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_ordered_list,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Numbered List",
-                                    "1."
-                                }
-
-                                button {
-                                    r#type: "button",
-                                    class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                                    onclick: handle_format_blockquote,
-                                    disabled: *isSubmitting.read(),
-                                    title: "Blockquote",
-                                    "Quote"
+                            } else {
+                                PreviewModeBodyEditor {
+                                    body: body.clone(),
                                 }
                             }
-
-                            textarea {
-                                value: "{body}",
-                                class: "mt-0 block w-full border border-gray-300 border-t-0 rounded-b-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono",
-                                rows: 8,
-                                oninput: move |e: Event<FormData>| {
-                                    *body.write() = e.value();
-                                },
-                                disabled: *isSubmitting.read()
-                            }
-                        } else {
-                            // Preview mode - show rendered markdown
-                            div {
-                                class: "mt-0 block w-full border border-gray-300 rounded-md shadow-sm py-3 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm min-h-[200px] bg-gray-50",
-                                if body.read().trim().is_empty() {
-                                    p {
-                                        class: "text-gray-400 italic",
-                                        "No content to preview"
-                                    }
-                                } else {
-                                    div {
-                                        class: "prose prose-sm max-w-none",
-                                        dangerous_inner_html: render_markdown_to_html(&body.read()),
-                                    }
-                                }
-                            }
-                        }
-                        }
-
-                        // Tags field
-                        div {
-                            div {
-                                // class: "block text-sm font-medium text-gray-700 mb-2",
-                                "Tags"
                             }
 
-                            div {
-                                class: "flex flex-wrap gap-2 mb-3",
-
-                                if *tags_loading.read() {
-                                    span {
-                                        class: "text-sm text-gray-500",
-                                        "Loading tags..."
-                                    }
-                                } else if tag_badges.read().is_empty() {
-                                    span {
-                                        class: "text-sm text-gray-500",
-                                        "No tags selected"
-                                    }
-                                } else {
-                                    for (tag_id, tag) in tag_badges.read().iter().cloned() {
-                                        div {
-                                            class: "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800",
-
-                                            span {
-                                                "{tag.name}"
-                                            }
-                                            button {
-                                                r#type: "button",
-                                                class: "ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                                                onclick: move |_| {
-                                                    let mut ids = selected_tag_ids.write();
-                                                    ids.retain(|id| *id != tag_id);
-                                                },
-                                                disabled: *isSubmitting.read(),
-
-                                                svg {
-                                                    class: "w-3 h-3",
-                                                    fill: "none",
-                                                    view_box: "0 0 24 24",
-                                                    stroke: "currentColor",
-
-                                                    path {
-                                                        stroke_linecap: "round",
-                                                        stroke_linejoin: "round",
-                                                        "stroke-width": 2,
-                                                        d: "M6 18L18 6M6 6l12 12"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            button {
-                                r#type: "button",
-                                class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                                onclick: move |_| {
-                                    *show_tag_selector.write() = !show_tag_selector();
-                                },
-                                disabled: *isSubmitting.read() || available_tags.read().is_empty(),
-
-                                svg {
-                                    class: "-ml-0.5 mr-2 h-4 w-4 text-gray-500",
-                                    fill: "none",
-                                    view_box: "0 0 24 24",
-                                    stroke: "currentColor",
-
-                                    path {
-                                        stroke_linecap: "round",
-                                        stroke_linejoin: "round",
-                                        "stroke-width": 2,
-                                        d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                    }
-                                }
-
-                                "Add Tag"
-                            }
-
-                            if *show_tag_selector.read() {
-                                div {
-                                    class: "mt-3 p-3 border border-gray-200 rounded-md bg-gray-50",
-
-                                    div {
-                                        class: "max-h-48 overflow-y-auto space-y-1",
-                                        for tag in available_tags_to_show().iter().cloned() {
-                                            button {
-                                                r#type: "button",
-                                                class: "w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                                                onclick: move |_| {
-                                                    let mut ids = selected_tag_ids.write();
-                                                    ids.push(tag.id.unwrap());
-                                                    *show_tag_selector.write() = false;
-                                                },
-                                                disabled: *isSubmitting.read(),
-                                                "{tag.name}"
-                                            }
-                                        }
-                                    }
-
-                                    button {
-                                        r#type: "button",
-                                        class: "mt-2 text-sm text-gray-500 hover:text-gray-700",
-                                        onclick: move |_| {
-                                            *show_tag_selector.write() = false;
-                                        },
-
-                                        "Cancel"
-                                    }
-                                }
-                            }
+                        TagsField {
+                            selected_tag_ids,
+                            is_submitting: isSubmitting,
+                            tag_to_remove,
+                            show_clear_all_confirmation,
+                            tags_loading,
+                            tag_badges,
+                            available_tags,
+                            show_tag_selector,
+                            available_tags_to_show,
                         }
                     }
                 }
@@ -715,6 +1012,26 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     disabled: *isSubmitting.read(),
                     "Cancel"
                 }
+            }
+        }
+
+        // Remove tag confirmation modal
+        if let Some((tag_id, tag_name)) = tag_to_remove.read().as_ref().cloned() {
+            RemoveTagConfirmationModal {
+                tag_id,
+                tag_name,
+                tag_to_remove,
+                selected_tag_ids,
+                is_submitting: isSubmitting,
+            }
+        }
+     // Clear all tags confirmation modal
+        if *show_clear_all_confirmation.read() {
+            ClearAllTagsConfirmationModal {
+                show_clear_all_confirmation,
+                selected_tag_ids,
+                tag_badges,
+                isSubmitting: isSubmitting,
             }
         }
     }
