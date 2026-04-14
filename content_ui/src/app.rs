@@ -27,6 +27,21 @@ pub fn App() -> Element {
         }
     });
 
+    // Load saved session for pages that need full Session object
+    let session_signal = use_signal(|| {
+        if let Ok(Some(session)) = UserContext::load_saved_session() {
+            let now = chrono::Utc::now().timestamp();
+            if now < session.expires_at {
+                Some(session)
+            } else {
+                let _ = UserContext::clear_saved_session();
+                None
+            }
+        } else {
+            None
+        }
+    });
+
     let mode = env!("APP_MODE");
     let supabase_url = env!("SUPABASE_URL");
     let supabase_anon_key = env!("SUPABASE_ANON_KEY");
@@ -38,6 +53,7 @@ pub fn App() -> Element {
     );
 
     use_context_provider(move || jwt_token);
+    use_context_provider(move || session_signal);
 
     // Create UserContext
     let user_context = UserContext::new(Some(config.clone()));
