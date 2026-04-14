@@ -51,9 +51,13 @@ fn encode(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
 }
 
-fn build_headers(config: &ClientConfig, prefer_return: bool) -> Result<Headers, String> {
+pub fn build_headers(
+    config: &ClientConfig,
+    prefer_return: bool,
+    jwt_token: Option<&str>,
+) -> Result<Headers, String> {
     let headers = Headers::new();
-    let credential = get_credential(config);
+    let credential = get_credential(config, jwt_token);
 
     headers.set(API_KEY_HEADER, &config.anon_key);
 
@@ -68,15 +72,18 @@ fn build_headers(config: &ClientConfig, prefer_return: bool) -> Result<Headers, 
     Ok(headers)
 }
 
-fn get_credential(config: &ClientConfig) -> &str {
+fn get_credential(config: &ClientConfig, jwt_token_param: Option<&str>) -> String {
     if let Some(ref service_role_key) = config.service_role_key {
-        return service_role_key;
+        return service_role_key.clone();
+    }
+    if let Some(token) = jwt_token_param {
+        return token.to_string();
     }
     if let Some(ref jwt_token) = config.jwt_token {
-        return jwt_token;
+        return jwt_token.clone();
     }
 
-    &config.anon_key
+    config.anon_key.clone()
 }
 
 pub async fn get<T: DeserializeOwned>(
@@ -87,7 +94,7 @@ pub async fn get<T: DeserializeOwned>(
     let url = build_url(config, table, params)?;
 
     let response_text = Request::get(&url)
-        .headers(build_headers(config, false)?)
+        .headers(build_headers(config, false, None)?)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch data: {}", e))?
@@ -129,7 +136,7 @@ pub async fn create<T: Serialize, R: DeserializeOwned>(
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
     Request::post(&url)
-        .headers(build_headers(config, true)?)
+        .headers(build_headers(config, true, None)?)
         .body(body)
         .map_err(|e| format!("Failed to build request: {}", e))?
         .send()
@@ -151,7 +158,7 @@ pub async fn update<T: Serialize, R: DeserializeOwned>(
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
     Request::patch(&url)
-        .headers(build_headers(config, true)?)
+        .headers(build_headers(config, true, None)?)
         .body(body)
         .map_err(|e| format!("Failed to build request: {}", e))?
         .send()
@@ -166,10 +173,47 @@ pub async fn delete(config: &ClientConfig, table: &str, id: i32) -> Result<(), S
     let url = build_url(config, table, &[("id", &id.to_string())])?;
 
     Request::delete(&url)
-        .headers(build_headers(config, false)?)
+        .headers(build_headers(config, false, None)?)
         .send()
         .await
         .map_err(|e| format!("Failed to delete data: {}", e))?;
 
     Ok(())
+}
+
+/// Get records where a column value is in a list of values using Supabase's in filter
+/// Example usage: get_by_in::<Content>(config, "content", "id", &[1, 2, 3]).await?
+pub async fn get_by_in<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    column: &str,
+    values: &[i32],
+) -> Result<Vec<T>, String> {
+    let values_str = values
+        .iter()
+        .map(|v| v.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let url = format!(
+        "{}/{}?{}=in.({})",
+        config.rest_url(),
+        table,
+        encode(column),
+        values_str
+    );
+
+    let response_text = Request::get(&url)
+        .headers(build_headers(config, false, None)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch data: {}", e))?
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+    tracing::debug!("Raw response from {}: {}", url, response_text);
+
+    serde_json::from_str::<Vec<T>>(&response_text)
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }

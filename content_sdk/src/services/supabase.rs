@@ -1,6 +1,9 @@
 use crate::models::{Content, ContentRequest};
 use crate::utils::config::Config;
-use supabase_client::{ClientConfig, create, delete, get, get_by, get_by_id, update};
+use gloo_net::http::Request;
+use supabase_client::{
+    ClientConfig, build_headers, create, delete, get, get_by, get_by_id, get_by_in, update,
+};
 
 #[derive(Clone)]
 pub struct SupabaseService {
@@ -43,12 +46,45 @@ impl SupabaseService {
 
     pub async fn create_content(&self, content_request: ContentRequest) -> Result<Content, String> {
         let config = self.config.as_ref().ok_or("Supabase not configured")?;
-        let results: Vec<Content> =
-            create::<ContentRequest, Content>(config, "content", &content_request).await?;
-        results
-            .into_iter()
-            .next()
-            .ok_or_else(|| "No content returned".to_string())
+
+        let url = format!("{}/content", config.rest_url());
+        tracing::debug!("Creating content at URL: {}", url);
+
+        let body = serde_json::to_string(&content_request)
+            .map_err(|e| format!("Failed to serialize request: {}", e))?;
+        tracing::debug!("Request body: {}", body);
+
+        let request: gloo_net::http::Request = Request::post(&url)
+            .headers(build_headers(config, true, None)?)
+            .body(body)
+            .map_err(|e| format!("Failed to build request: {}", e))?;
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| format!("Failed to create data: {}", e))?;
+
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+        tracing::debug!("Supabase raw response: {}", response_text);
+
+        match serde_json::from_str::<Vec<Content>>(&response_text) {
+            Ok(results) => {
+                tracing::debug!("Parsed {} content items from response", results.len());
+                results
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "No content returned".to_string())
+            }
+            Err(e) => {
+                tracing::error!("Failed to parse response JSON: {}", e);
+                tracing::error!("Response was: {}", response_text);
+                Err(format!("Failed to parse response: {}", e))
+            }
+        }
     }
 
     pub async fn update_content(
@@ -78,6 +114,14 @@ impl SupabaseService {
             &[("status", status), ("order", "created_at.desc")],
         )
         .await
+    }
+
+    pub async fn get_content_by_ids(&self, ids: &[i32]) -> Result<Vec<Content>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        get_by_in::<Content>(config, "content", "id", ids).await
     }
 }
 

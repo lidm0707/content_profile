@@ -11,14 +11,31 @@ use dioxus::prelude::*;
 #[derive(Clone, PartialEq, Props)]
 pub struct ContentTagsContext {
     tag_service: Signal<TagService>,
+    config: Signal<Option<Config>>,
 }
 
 impl ContentTagsContext {
     /// Creates a new ContentTagsContext
     pub fn new(config: Option<Config>) -> Self {
+        let config_signal = Signal::new(config);
         ContentTagsContext {
-            tag_service: Signal::new(TagService::new(config)),
+            tag_service: Signal::new(TagService::new(config_signal.read().clone())),
+            config: config_signal,
         }
+    }
+
+    /// Updates the JWT token and recreates the service with new config
+    pub fn update_jwt_token(&mut self, jwt_token: Option<String>) {
+        let mut config = self.config.write();
+        if let Some(ref mut cfg) = *config {
+            cfg.jwt_token = jwt_token;
+        } else {
+            *config = Some(Config::new("office", "", "", jwt_token));
+        }
+
+        // Recreate the service with updated config
+        let updated_service = TagService::new((*config).clone());
+        *self.tag_service.write() = updated_service;
     }
 
     /// Gets the tag service
@@ -81,6 +98,24 @@ impl ContentTagsContext {
     ) -> Result<(), String> {
         let mut service = self.tag_service.cloned();
         service.update_content_tags(content_id, tag_ids).await
+    }
+
+    /// Fetches content-tag junction records for a specific tag
+    ///
+    /// This method queries the content_tags junction table and returns
+    /// the ContentTag records (junction table) for the given tag_id.
+    pub async fn get_content_tags_for_tag(&self, tag_id: i32) -> Result<Vec<ContentTag>, String> {
+        let service = self.tag_service.cloned();
+        service.get_content_tags_for_tag(tag_id).await
+    }
+
+    /// Fetches content IDs for a specific tag
+    ///
+    /// This method queries the content_tags junction table and returns
+    /// the content_id values for the given tag_id.
+    pub async fn get_content_ids_for_tag(&self, tag_id: i32) -> Result<Vec<i32>, String> {
+        let service = self.tag_service.cloned();
+        service.get_content_ids_for_tag(tag_id).await
     }
 }
 

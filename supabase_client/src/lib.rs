@@ -5,5 +5,6 @@
 pub mod client;
 pub mod config;
 
+pub use client::get_by_in;
 pub use client::*;
 pub use config::{ClientConfig, client_config};

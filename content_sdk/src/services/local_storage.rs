@@ -125,6 +125,16 @@ impl LocalStorageService {
             .collect())
     }
 
+    /// Fetches content by multiple IDs
+    pub fn get_content_by_ids(&self, ids: &[i32]) -> Result<Vec<Content>, String> {
+        let contents = self.contents.read();
+        Ok(contents
+            .iter()
+            .filter(|c| c.id.map(|id| ids.contains(&id)).unwrap_or(false))
+            .cloned()
+            .collect())
+    }
+
     /// Syncs local content with remote content
     pub fn sync_content(&mut self, remote_contents: Vec<Content>) -> Result<Vec<Content>, String> {
         let mut contents = self.contents.write();

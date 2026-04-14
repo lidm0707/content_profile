@@ -334,6 +334,34 @@ GET /content?id=1
 GET /content?slug=my-content-slug
 ```
 
+#### Get Content by IDs
+
+Batch fetch content items using the IN filter for efficient querying:
+
+```http
+GET /content?id=in.(1,2,3)
+```
+
+Use this when you need to fetch multiple content items by their IDs in a single request, which prevents N+1 query problems.
+
+#### Get Content by Tags
+
+Fetch all content items that have specific tags:
+
+```http
+# Step 1: Get content-tag junction records for a tag
+GET /content_tags?tag_id=eq.5
+
+# Step 2: Extract content_ids from response
+# Example response: [{"id": 1, "content_id": 10, "tag_id": 5}, ...]
+content_ids = [10, 20, 30]
+
+# Step 3: Batch fetch content items
+GET /content?id=in.(10,20,30)
+```
+
+This approach efficiently fetches all content for a specific tag using batch operations instead of N+1 queries.
+
 #### Create Content
 
 ```http

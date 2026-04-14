@@ -161,6 +161,28 @@ let items: Vec<Content> = get_by::<Content>(
 ).await?;
 ```
 
+### GET by IN Filter
+
+Fetch multiple records where a column value is in a list of values using the `in` operator:
+
+```rust
+use supabase_client::get_by_in;
+
+// Fetch content with IDs 1, 2, 3
+let items: Vec<Content> = get_by_in::<Content>(
+    &config,
+    "content",
+    "id",
+    &[1, 2, 3],
+).await?;
+// URL: /content?id=in.(1,2,3)
+```
+
+The `get_by_in` function is especially useful for batch operations like:
+- Fetching content items by multiple IDs (e.g., when filtering by tags)
+- Getting multiple user records by their IDs
+- Fetching related records in a single query
+
 ### POST - Create Data
 
 ```rust
@@ -229,7 +251,7 @@ Supabase uses operator prefixes for filtering:
 | Like | `column=like.value%` | Pattern match |
 | ILike | `column=ilike.value%` | Case-insensitive like |
 | Is | `column=is.value` | Exact match |
-| In | `column=in.(value1,value2)` | In list |
+| In | `column=in.(value1,value2)` | In list - matches if column value equals any value in the comma-separated list |
 
 ### Filter Implementation
 
@@ -272,6 +294,26 @@ let items: Vec<Content> = get::<Content>(
 ).await?;
 // URL: /content?status=eq.published&order=created_at.desc&limit=20
 ```
+
+### IN Filter with Batch Fetching
+
+When working with junction tables or need to fetch related records efficiently:
+
+```rust
+// Example: Fetch all content for specific tag IDs
+let tag_content_ids: Vec<i32> = get_content_ids_for_tags(&tag_ids).await?;
+
+// Batch fetch all content in one request
+let items: Vec<Content> = get_by_in::<Content>(
+    &config,
+    "content",
+    "id",
+    &tag_content_ids,
+).await?;
+// URL: /content?id=in.(1,5,9,15)
+```
+
+This approach prevents N+1 query problems by fetching all needed records in a single request.
 
 ## Request Headers
 

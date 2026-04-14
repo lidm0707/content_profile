@@ -3,18 +3,41 @@ use crate::services::ContentService;
 use crate::utils::config::Config;
 use dioxus::prelude::*;
 
+/// Helper struct to hold authentication state that can be updated
+#[derive(Clone, PartialEq)]
+pub struct AuthState {
+    pub jwt_token: Option<String>,
+}
+
 /// Content context for managing content state across the app
-#[derive(Clone, Props, PartialEq)]
+#[derive(Clone, PartialEq, Props)]
 pub struct ContentContext {
     content_service: Signal<ContentService>,
+    config: Signal<Option<Config>>,
 }
 
 impl ContentContext {
     /// Creates a new ContentContext
     pub fn new(config: Option<Config>) -> Self {
+        let config_signal = Signal::new(config);
         ContentContext {
-            content_service: Signal::new(ContentService::new(config)),
+            content_service: Signal::new(ContentService::new(config_signal.read().clone())),
+            config: config_signal,
         }
+    }
+
+    /// Updates the JWT token and recreates the service with new config
+    pub fn update_jwt_token(&mut self, jwt_token: Option<String>) {
+        let mut config = self.config.write();
+        if let Some(ref mut cfg) = *config {
+            cfg.jwt_token = jwt_token;
+        } else {
+            *config = Some(Config::new("office", "", "", jwt_token));
+        }
+
+        // Recreate the service with updated config
+        let updated_service = ContentService::new((*config).clone());
+        *self.content_service.write() = updated_service;
     }
 
     /// Gets the content service
@@ -46,6 +69,11 @@ impl ContentContext {
             .cloned()
             .get_content_by_status(status)
             .await
+    }
+
+    /// Fetches content items by multiple IDs
+    pub async fn get_content_by_ids(&self, ids: &[i32]) -> Result<Vec<Content>, String> {
+        self.content_service.cloned().get_content_by_ids(ids).await
     }
 
     /// Creates a new content item

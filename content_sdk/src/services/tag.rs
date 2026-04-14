@@ -1,7 +1,8 @@
-use crate::models::{ContentTag, ContentTagRequest, Tag};
+use crate::models::{Content, ContentTag, ContentTagRequest, Tag};
 use crate::utils::config::Config;
 use dioxus::prelude::*;
-use supabase_client::{ClientConfig, create, delete, get};
+use gloo_net::http::Request;
+use supabase_client::{ClientConfig, build_headers, create, delete, get, get_by_in};
 const TAGS_TABLE: &str = "tags";
 const CONTENT_TAGS_TABLE: &str = "content_tags";
 
@@ -32,6 +33,18 @@ impl TagService {
         self.remote_service
             .get_content_tags_for_content(content_id)
             .await
+    }
+
+    pub async fn get_content_tags_for_tag(&self, tag_id: i32) -> Result<Vec<ContentTag>, String> {
+        self.remote_service.get_content_tags_for_tag(tag_id).await
+    }
+
+    pub async fn get_content_ids_for_tag(&self, tag_id: i32) -> Result<Vec<i32>, String> {
+        self.remote_service.get_content_ids_for_tag(tag_id).await
+    }
+
+    pub async fn get_content_for_tag(&self, tag_id: i32) -> Result<Vec<Content>, String> {
+        self.remote_service.get_content_for_tag(tag_id).await
     }
 
     pub async fn add_tag_to_content(
@@ -182,12 +195,44 @@ impl SupabaseTagService {
     ) -> Result<ContentTag, String> {
         let config = self.config.as_ref().ok_or("Supabase not configured")?;
 
-        let result =
-            create::<ContentTagRequest, ContentTag>(config, CONTENT_TAGS_TABLE, &request).await?;
-        result
-            .into_iter()
-            .next()
-            .ok_or_else(|| "Failed to create content_tag".to_string())
+        let url = format!("{}/{}", config.rest_url(), CONTENT_TAGS_TABLE);
+        tracing::debug!("Adding tag to content at URL: {}", url);
+
+        let body = serde_json::to_string(&request)
+            .map_err(|e| format!("Failed to serialize request: {}", e))?;
+        tracing::debug!("Request body: {}", body);
+
+        let request: gloo_net::http::Request = Request::post(&url)
+            .headers(build_headers(config, true, None)?)
+            .body(body)
+            .map_err(|e| format!("Failed to build request: {}", e))?;
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| format!("Failed to create data: {}", e))?;
+
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+        tracing::debug!("Supabase raw response: {}", response_text);
+
+        match serde_json::from_str::<Vec<ContentTag>>(&response_text) {
+            Ok(results) => {
+                tracing::debug!("Parsed {} content_tag items from response", results.len());
+                results
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| "Failed to create content_tag".to_string())
+            }
+            Err(e) => {
+                tracing::error!("Failed to parse response JSON: {}", e);
+                tracing::error!("Response was: {}", response_text);
+                Err(format!("Failed to parse response: {}", e))
+            }
+        }
     }
 
     pub async fn remove_tag_from_content(
@@ -274,5 +319,41 @@ impl SupabaseTagService {
 
         let tags: Vec<Tag> = get(config, TAGS_TABLE, &[("id", &id.to_string())]).await?;
         Ok(tags.into_iter().next())
+    }
+
+    pub async fn get_content_tags_for_tag(&self, tag_id: i32) -> Result<Vec<ContentTag>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+
+        get(
+            config,
+            CONTENT_TAGS_TABLE,
+            &[("tag_id", &tag_id.to_string())],
+        )
+        .await
+    }
+
+    pub async fn get_content_ids_for_tag(&self, tag_id: i32) -> Result<Vec<i32>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+
+        let content_tags: Vec<ContentTag> = get(
+            config,
+            CONTENT_TAGS_TABLE,
+            &[("tag_id", &tag_id.to_string())],
+        )
+        .await?;
+
+        Ok(content_tags.into_iter().map(|ct| ct.content_id).collect())
+    }
+
+    pub async fn get_content_for_tag(&self, tag_id: i32) -> Result<Vec<Content>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+
+        let content_ids = self.get_content_ids_for_tag(tag_id).await?;
+
+        if content_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        get_by_in::<Content>(config, "content", "id", &content_ids).await
     }
 }

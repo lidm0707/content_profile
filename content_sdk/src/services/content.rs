@@ -128,6 +128,21 @@ impl ContentService {
         }
     }
 
+    /// Fetches content by multiple IDs using Supabase in filter
+    pub async fn get_content_by_ids(&self, ids: &[i32]) -> Result<Vec<Content>, String> {
+        debug!("Getting content by IDs {:?} (mode: {:?})", ids, self.mode);
+        match self.mode {
+            AppMode::Office => {
+                trace!("Using LocalStorageService for get_content_by_ids");
+                self.local_service.get_content_by_ids(ids)
+            }
+            AppMode::Supabase => {
+                trace!("Using SupabaseService for get_content_by_ids");
+                self.remote_service.get_content_by_ids(ids).await
+            }
+        }
+    }
+
     /// Gets local storage service directly
     pub fn local_service(&self) -> &LocalStorageService {
         &self.local_service

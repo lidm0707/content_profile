@@ -310,6 +310,98 @@ if let Some(tag) = tags.find_by_slug("rust") {
 let tag = tags.get_by_id(123).await?;
 ```
 
+#### Content by Tags
+
+Efficiently fetch all content items that have specific tags using batch operations:
+
+```rust
+use content_sdk::contexts::{ContentContext, ContentTagsContext, TagContext};
+
+#[component]
+fn ContentByTag(tag_name: String) -> Element {
+    let content_context: ContentContext = use_context();
+    let tag_context: TagContext = use_context();
+    let content_tags_context: ContentTagsContext = use_context();
+
+    let mut contents = use_resource(move || {
+        let tag_name = tag_name.clone();
+        let tag_context = tag_context.clone();
+        let content_tags_context = content_tags_context.clone();
+        let content_context = content_context.clone();
+
+        async move {
+            // Step 1: Get tag by name
+            let all_tags = tag_context.get_all_tags().await?;
+            let tag = all_tags
+                .iter()
+                .find(|t| t.name == tag_name)
+                .ok_or_else(|| format!("Tag '{}' not found", tag_name))?;
+
+            let tag_id = tag.id.ok_or_else(|| format!("Tag '{}' has no ID", tag_name))?;
+
+            // Step 2: Get content IDs for the tag
+            let content_ids = content_tags_context.get_content_ids_for_tag(tag_id).await?;
+
+            if content_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            // Step 3: Batch fetch all content items
+            content_context.get_content_by_ids(&content_ids).await
+        }
+    });
+
+    rsx! {
+        div {
+            match contents.read().as_ref() {
+                None => rsx! { div { "Loading..." } },
+                Some(Ok(content_list)) => rsx! {
+                    div {
+                        for content in content_list {
+                            ContentCard { content }
+                        }
+                    }
+                },
+                Some(Err(e)) => rsx! { div { "Error: {e}" } },
+            }
+        }
+    }
+}
+```
+
+This pattern efficiently fetches all content for a specific tag using:
+- `TagContext::get_all_tags()` to find the tag by name
+- `ContentTagsContext::get_content_ids_for_tag()` to get junction records
+- `ContentContext::get_content_by_ids()` to batch fetch all content in one request
+
+This prevents N+1 query problems by fetching all needed records in a single batch request instead of making individual requests for each content item.
+
+#### Batch Fetching by IDs
+
+When you have multiple content IDs and need to fetch them efficiently:
+
+```rust
+use content_sdk::contexts::ContentContext;
+
+async fn fetch_content_batch(
+    content_context: &ContentContext,
+    content_ids: Vec<i32>,
+) -> Result<Vec<Content>, String> {
+    // Empty check
+    if content_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Batch fetch all content in one request
+    content_context.get_content_by_ids(&content_ids).await
+}
+```
+
+Use this pattern when:
+- Fetching related content from junction tables
+- Displaying multiple content items from a list
+- Implementing batch operations that would otherwise cause N+1 queries
+
 ## Supabase Client Configuration
 
 ### Basic Configuration

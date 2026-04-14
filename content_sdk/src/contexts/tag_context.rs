@@ -6,14 +6,31 @@ use dioxus::prelude::*;
 #[derive(Clone, PartialEq, Props)]
 pub struct TagContext {
     tag_service: Signal<TagService>,
+    config: Signal<Option<Config>>,
 }
 
 impl TagContext {
     /// Creates a new TagContext
     pub fn new(config: Option<Config>) -> Self {
+        let config_signal = Signal::new(config);
         TagContext {
-            tag_service: Signal::new(TagService::new(config)),
+            tag_service: Signal::new(TagService::new(config_signal.read().clone())),
+            config: config_signal,
         }
+    }
+
+    /// Updates the JWT token and recreates the service with new config
+    pub fn update_jwt_token(&mut self, jwt_token: Option<String>) {
+        let mut config = self.config.write();
+        if let Some(ref mut cfg) = *config {
+            cfg.jwt_token = jwt_token;
+        } else {
+            *config = Some(Config::new("office", "", "", jwt_token));
+        }
+
+        // Recreate the service with updated config
+        let updated_service = TagService::new((*config).clone());
+        *self.tag_service.write() = updated_service;
     }
 
     /// Gets the tag service
