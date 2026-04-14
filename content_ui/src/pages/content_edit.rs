@@ -1,7 +1,8 @@
 use crate::components::ContentForm;
 use crate::routes::Route;
 use content_sdk::contexts::ContentContext;
-use content_sdk::models::{Content, ContentRequest, Tag};
+use content_sdk::contexts::ContentTagsContext;
+use content_sdk::models::{Content, ContentRequest};
 use dioxus::prelude::*;
 use tracing::{debug, info, warn};
 
@@ -12,6 +13,7 @@ pub fn ContentEdit(id: i32) -> Element {
     let is_editing = id != 0;
     let mut refresh_trigger = use_context::<Signal<u64>>();
     let content_context = use_context::<ContentContext>();
+    let content_tags_context = use_context::<ContentTagsContext>();
 
     // Clone contexts for use in resource closures
     let content_context_for_content_resource = content_context.clone();
@@ -90,7 +92,7 @@ pub fn ContentEdit(id: i32) -> Element {
         }
     });
 
-    let handle_form_submit = move |request: ContentRequest| {
+    let handle_form_submit = move |(request, selected_tag_ids): (ContentRequest, Vec<i32>)| {
         is_submitting.set(true);
         error_message.set(None);
         success_message.set(None);
@@ -98,6 +100,8 @@ pub fn ContentEdit(id: i32) -> Element {
         let _current_content_for_spawn = current_content.read().clone();
         let navigate_for_spawn = navigate;
         let mut content_context_for_spawn = content_context.clone();
+        let mut content_tags_context_for_spawn = content_tags_context.clone();
+        let is_editing_for_spawn = is_editing;
 
         // Spawn an async task to handle the submission
         async move {
@@ -113,13 +117,25 @@ pub fn ContentEdit(id: i32) -> Element {
 
             match result {
                 Ok(content) => {
-                    let _content_id = content.id.unwrap();
+                    let content_id = content.id.unwrap();
 
-                    success_message.set(Some(if is_editing {
-                        "Content updated successfully!".to_string()
+                    // Sync tags with content_tags table
+                    if let Err(err) = content_tags_context_for_spawn
+                        .update_content_tags(content_id, selected_tag_ids)
+                        .await
+                    {
+                        warn!("Failed to sync tags: {}", err);
+                        error_message.set(Some(format!(
+                            "Content saved but failed to sync tags: {}",
+                            err
+                        )));
                     } else {
-                        "Content created successfully!".to_string()
-                    }));
+                        success_message.set(Some(if is_editing_for_spawn {
+                            "Content updated successfully!".to_string()
+                        } else {
+                            "Content created successfully!".to_string()
+                        }));
+                    }
 
                     // Trigger content refresh for dashboard
                     *refresh_trigger.write() += 1;

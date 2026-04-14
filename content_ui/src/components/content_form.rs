@@ -15,8 +15,8 @@ use tracing::debug;
 pub struct ContentFormProps {
     /// Optional content for editing (None for creating new content)
     pub content: ReadSignal<Option<Content>>,
-    /// Callback when form is submitted successfully
-    pub on_submit: EventHandler<ContentRequest>,
+    /// Callback when form is submitted successfully (includes selected tag IDs)
+    pub on_submit: EventHandler<(ContentRequest, Vec<i32>)>,
     /// Callback when form is cancelled
     pub on_cancel: EventHandler<()>,
 }
@@ -290,8 +290,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             status: current_status,
         };
 
-        debug!("ContentRequest created with status: {}", request.status);
-        props.on_submit.call(request);
+        let selected_tag_ids_clone = selected_tag_ids.read().clone();
+        debug!(
+            "ContentRequest created with status: {}, tag_ids: {:?}",
+            request.status, selected_tag_ids_clone
+        );
+        props.on_submit.call((request, selected_tag_ids_clone));
         isSubmitting.set(false);
     };
 
