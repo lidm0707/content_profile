@@ -9,10 +9,16 @@ pub struct Config {
     pub mode: AppMode,
     pub supabase_url: Option<String>,
     pub supabase_anon_key: Option<String>,
+    pub jwt_token: Option<String>,
 }
 
 impl Config {
-    pub fn new(mode: &str, supabase_url: &str, supabase_anon_key: &str) -> Self {
+    pub fn new(
+        mode: &str,
+        supabase_url: &str,
+        supabase_anon_key: &str,
+        jwt_token: Option<String>,
+    ) -> Self {
         let mode = match mode {
             "supabase" => AppMode::Supabase,
             _ => AppMode::Office,
@@ -39,6 +45,7 @@ impl Config {
             mode,
             supabase_url: supabase_url_opt,
             supabase_anon_key: supabase_anon_key_opt,
+            jwt_token,
         }
     }
 

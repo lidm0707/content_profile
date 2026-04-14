@@ -124,7 +124,12 @@ impl SupabaseTagService {
         let client_config = config.and_then(|c| {
             let url = c.supabase_url?;
             let anon_key = c.supabase_anon_key?;
-            Some(supabase_client::client_config(url, anon_key))
+            Some(supabase_client::ClientConfig {
+                base_url: url,
+                anon_key,
+                service_role_key: None,
+                jwt_token: c.jwt_token,
+            })
         });
 
         Self {
