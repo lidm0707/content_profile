@@ -56,11 +56,24 @@ impl TagService {
         content_id: i32,
         tag_ids: Vec<i32>,
     ) -> Result<(), String> {
-        let current_tags = self.get_tags_for_content(content_id).await?;
-        let current_tag_ids: Vec<i32> = current_tags
+        let current_content_tags = self.get_content_tags_for_content(content_id).await?;
+        let current_tag_ids: Vec<i32> = current_content_tags.iter().map(|ct| ct.tag_id).collect();
+
+        let config = self
+            .remote_service
+            .config
+            .as_ref()
+            .ok_or("Supabase not configured")?;
+
+        let ids_to_delete: Vec<i32> = current_content_tags
             .iter()
-            .map(|t| t.id.unwrap_or_default())
+            .filter(|ct| !tag_ids.contains(&ct.tag_id))
+            .filter_map(|ct| ct.id)
             .collect();
+
+        for id in ids_to_delete {
+            delete(config, CONTENT_TAGS_TABLE, id).await?;
+        }
 
         for tag_id in &tag_ids {
             if !current_tag_ids.contains(tag_id) {
@@ -69,13 +82,6 @@ impl TagService {
                     tag_id: *tag_id,
                 })
                 .await?;
-            }
-        }
-
-        for current_tag_id in current_tag_ids {
-            if !tag_ids.contains(&current_tag_id) {
-                self.remove_tag_from_content(content_id, current_tag_id)
-                    .await?;
             }
         }
 
