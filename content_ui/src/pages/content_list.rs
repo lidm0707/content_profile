@@ -1,6 +1,6 @@
 use crate::components::ContentList as ContentListComponent;
-use crate::contexts::{ContentContext, TagContext};
 use crate::routes::Route;
+use content_sdk::contexts::{ContentContext, TagContext};
 use content_sdk::models::Content;
 use dioxus::prelude::*;
 

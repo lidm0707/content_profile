@@ -1,3 +1,5 @@
+use content_sdk::ContentTagsContext;
+use content_sdk::TagContext;
 use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use content_sdk::utils::markdown::update_tags_in_frontmatter;
 use content_sdk::utils::{
@@ -13,8 +15,6 @@ use tracing::debug;
 pub struct ContentFormProps {
     /// Optional content for editing (None for creating new content)
     pub content: ReadSignal<Option<Content>>,
-    /// Available tags for selection
-    pub available_tags: Signal<Vec<Tag>>,
     /// Callback when form is submitted successfully
     pub on_submit: EventHandler<ContentRequest>,
     /// Callback when form is cancelled
@@ -24,6 +24,11 @@ pub struct ContentFormProps {
 /// Content form component for creating and editing content
 #[component]
 pub fn ContentForm(props: ContentFormProps) -> Element {
+    let tag_context = use_context::<TagContext>();
+    let content_tags_context = use_context::<ContentTagsContext>();
+
+    debug!("ContentForm rendered");
+
     let mut title = use_signal(|| {
         props
             .content
@@ -48,14 +53,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             .map(|c| c.body.clone())
             .unwrap_or_default()
     });
-    let mut selected_tag_ids = use_signal(|| {
-        props
-            .content
-            .read()
-            .as_ref()
-            .and_then(|c| c.tags.clone())
-            .unwrap_or_default()
-    });
+    let mut selected_tag_ids = use_signal(Vec::<i32>::new);
     let mut status = use_signal(|| {
         let status_value = props
             .content
@@ -69,6 +67,99 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut isSubmitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
+
+    // Fetch available_tags using resource
+    let available_tags_resource = use_resource(move || {
+        let context = tag_context.clone();
+        async move {
+            debug!("Fetching all available tags");
+            match context.get_all_tags().await {
+                Ok(tags) => {
+                    debug!(
+                        "Successfully fetched {} available tags: {:?}",
+                        tags.len(),
+                        tags
+                    );
+                    tags
+                }
+                Err(e) => {
+                    warn!("Failed to fetch available tags: {}", e);
+                    vec![]
+                }
+            }
+        }
+    });
+
+    // Fetch content_tags using resource
+    let content_tags_resource = use_resource(move || {
+        let content_id = props.content.read().as_ref().and_then(|c| c.id);
+        let context = content_tags_context.clone();
+        async move {
+            debug!("Fetching content_tags for content_id: {:?}", content_id);
+            if let Some(id) = content_id {
+                match context.tag_service().get_content_tags_for_content(id).await {
+                    Ok(tags) => {
+                        debug!(
+                            "Successfully fetched {} content_tags: {:?}",
+                            tags.len(),
+                            tags
+                        );
+                        let tag_ids: Vec<i32> = tags.iter().map(|t| t.tag_id).collect();
+                        debug!("Extracted tag_ids: {:?}", tag_ids);
+                        tag_ids
+                    }
+                    Err(e) => {
+                        warn!("Failed to fetch content tags: {}", e);
+                        vec![]
+                    }
+                }
+            } else {
+                debug!("No content_id available, returning empty tags");
+                vec![]
+            }
+        }
+    });
+
+    // Initialize selected_tag_ids when resource completes
+    use_effect(move || {
+        if let Some(tag_ids) = content_tags_resource.read().as_ref() {
+            debug!("Initializing selected_tag_ids from resource: {:?}", tag_ids);
+            selected_tag_ids.set(tag_ids.clone());
+        }
+    });
+
+    // Get available_tags from resource
+    let available_tags = use_memo(move || {
+        available_tags_resource
+            .read()
+            .as_ref()
+            .map_or(Vec::<Tag>::new(), |result| result.clone())
+    });
+
+    // Check if tags are still loading
+    let tags_loading = use_memo(move || {
+        available_tags_resource.read().is_none() || content_tags_resource.read().is_none()
+    });
+
+    // Pre-compute tag badges for rendering
+    let tag_badges = use_memo(move || {
+        let selected_ids = selected_tag_ids.read();
+        let tags = available_tags.read();
+
+        if selected_ids.is_empty() {
+            vec![]
+        } else {
+            selected_ids
+                .iter()
+                .filter_map(|&tag_id| {
+                    tags.iter().find(|t| t.id == Some(tag_id)).map(|tag| {
+                        debug!("Found tag for id {}: {}", tag_id, tag.name);
+                        (tag_id, tag.clone())
+                    })
+                })
+                .collect::<Vec<(i32, Tag)>>()
+        }
+    });
 
     let is_editing = props.content.read().is_some();
     let title_text = if is_editing {
@@ -88,7 +179,6 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             slug.set(content.slug.clone());
             body.set(content.body.clone());
             status.set(content.status.clone());
-            selected_tag_ids.set(content.tags.clone().unwrap_or_default());
             debug!(
                 "Content effect updated - title: {}, status: {}",
                 content.title, content.status
@@ -174,8 +264,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
         isSubmitting.set(true);
 
-        let selected_tags: Vec<Tag> = props
-            .available_tags
+        let selected_tags: Vec<Tag> = available_tags
             .read()
             .iter()
             .filter(|t| selected_tag_ids.read().contains(&t.id.unwrap()))
@@ -199,7 +288,6 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             slug: slug.read().clone(),
             body: updated_body,
             status: current_status,
-            tags: Some(selected_tag_ids.read().clone()),
         };
 
         debug!("ContentRequest created with status: {}", request.status);
@@ -207,35 +295,23 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         isSubmitting.set(false);
     };
 
-    let parent_tags: Vec<Tag> = props
-        .available_tags
-        .read()
-        .iter()
-        .filter(|t| t.parent_id.is_none())
-        .cloned()
-        .collect();
+    let mut show_tag_selector = use_signal(|| false);
 
-    let child_tags_map: std::collections::HashMap<i32, Vec<Tag>> = props
-        .available_tags
-        .read()
-        .iter()
-        .filter(|t| t.parent_id.is_some())
-        .fold(std::collections::HashMap::new(), |mut acc, tag| {
-            if let Some(parent_id) = tag.parent_id {
-                acc.entry(parent_id)
-                    .or_insert_with(Vec::new)
-                    .push(tag.clone());
-            }
-            acc
-        });
-
-    let orphan_tags: Vec<Tag> = props
-        .available_tags
-        .read()
-        .iter()
-        .filter(|t| t.parent_id.is_some() && !parent_tags.iter().any(|p| p.id == t.parent_id))
-        .cloned()
-        .collect();
+    let available_tags_to_show = use_memo(move || {
+        let selected = selected_tag_ids.read();
+        let tags = available_tags.read();
+        let filtered = tags
+            .iter()
+            .filter(|tag| !selected.contains(&tag.id.unwrap()))
+            .cloned()
+            .collect::<Vec<Tag>>();
+        debug!(
+            "available_tags_to_show computed: {} tags (filtered from {} total tags)",
+            filtered.len(),
+            tags.len()
+        );
+        filtered
+    });
 
     rsx! {
         div {
@@ -493,120 +569,114 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
                         // Tags field
                         div {
-                            label {
-                                class: "block text-sm font-medium text-gray-700 mb-2",
+                            div {
+                                // class: "block text-sm font-medium text-gray-700 mb-2",
                                 "Tags"
                             }
 
-                            if props.available_tags.read().is_empty() {
-                                p {
-                                    class: "text-sm text-gray-500",
-                                    "No tags available. Create tags first."
-                                }
-                            } else {
-                                div {
-                                    class: "space-y-3",
+                            div {
+                                class: "flex flex-wrap gap-2 mb-3",
 
-                                    for parent_tag in parent_tags {
+                                if *tags_loading.read() {
+                                    span {
+                                        class: "text-sm text-gray-500",
+                                        "Loading tags..."
+                                    }
+                                } else if tag_badges.read().is_empty() {
+                                    span {
+                                        class: "text-sm text-gray-500",
+                                        "No tags selected"
+                                    }
+                                } else {
+                                    for (tag_id, tag) in tag_badges.read().iter().cloned() {
                                         div {
-                                            class: "flex items-center",
+                                            class: "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800",
 
-                                            input {
-                                                r#type: "checkbox",
-                                                id: "tag-{parent_tag.id.unwrap()}",
-                                                checked: selected_tag_ids.read().contains(&parent_tag.id.unwrap()),
-                                                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                                                onchange: move |e: Event<FormData>| {
-                                                    let checked = e.checked();
-                                                    let parent_id = parent_tag.id.unwrap();
+                                            span {
+                                                "{tag.name}"
+                                            }
+                                            button {
+                                                r#type: "button",
+                                                class: "ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                                                onclick: move |_| {
                                                     let mut ids = selected_tag_ids.write();
-                                                    if checked {
-                                                        ids.push(parent_id);
-                                                    } else {
-                                                        ids.retain(|id| *id != parent_id);
-                                                    }
+                                                    ids.retain(|id| *id != tag_id);
                                                 },
-                                                disabled: *isSubmitting.read()
-                                            }
+                                                disabled: *isSubmitting.read(),
 
-                                            label {
-                                                r#for: "tag-{parent_tag.id.unwrap()}",
-                                                class: "ml-2 block text-sm text-gray-900 font-medium",
-                                                "{parent_tag.name}"
-                                            }
-                                        }
+                                                svg {
+                                                    class: "w-3 h-3",
+                                                    fill: "none",
+                                                    view_box: "0 0 24 24",
+                                                    stroke: "currentColor",
 
-                                        if let Some(child_tags) = child_tags_map.get(&parent_tag.id.unwrap()).cloned() {
-                                            div {
-                                                class: "ml-6 space-y-2 mt-2",
-
-                                                for child_tag in child_tags {
-                                                    div {
-                                                        class: "flex items-center",
-
-                                                        input {
-                                                            r#type: "checkbox",
-                                                            id: "tag-{child_tag.id.unwrap()}",
-                                                            checked: selected_tag_ids.read().contains(&child_tag.id.unwrap()),
-                                                            class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                                                            onchange: move |e: Event<FormData>| {
-                                                                let checked = e.checked();
-                                                                let child_id = child_tag.id.unwrap();
-                                                                let mut ids = selected_tag_ids.write();
-                                                                if checked {
-                                                                    ids.push(child_id);
-                                                                } else {
-                                                                    ids.retain(|id| *id != child_id);
-                                                                }
-                                                            },
-                                                            disabled: *isSubmitting.read()
-                                                        }
-
-                                                        label {
-                                                            r#for: "tag-{child_tag.id.unwrap()}",
-                                                            class: "ml-2 block text-sm text-gray-700",
-                                                            "{child_tag.name}"
-                                                        }
+                                                    path {
+                                                        stroke_linecap: "round",
+                                                        stroke_linejoin: "round",
+                                                        "stroke-width": 2,
+                                                        d: "M6 18L18 6M6 6l12 12"
                                                     }
                                                 }
                                             }
                                         }
                                     }
+                                }
+                            }
 
-                                    if !orphan_tags.is_empty() {
-                                        div {
-                                            class: "mt-4 border-t pt-4",
+                            button {
+                                r#type: "button",
+                                class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                                onclick: move |_| {
+                                    *show_tag_selector.write() = !show_tag_selector();
+                                },
+                                disabled: *isSubmitting.read() || available_tags.read().is_empty(),
 
-                                            for orphan_tag in orphan_tags {
-                                                div {
-                                                    class: "flex items-center",
+                                svg {
+                                    class: "-ml-0.5 mr-2 h-4 w-4 text-gray-500",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    stroke: "currentColor",
 
-                                                    input {
-                                                        r#type: "checkbox",
-                                                        id: "tag-{orphan_tag.id.unwrap()}",
-                                                        checked: selected_tag_ids.read().contains(&orphan_tag.id.unwrap()),
-                                                        class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                                                        onchange: move |e: Event<FormData>| {
-                                                            let checked = e.checked();
-                                                            let orphan_id = orphan_tag.id.unwrap();
-                                                            let mut ids = selected_tag_ids.write();
-                                                            if checked {
-                                                                ids.push(orphan_id);
-                                                            } else {
-                                                                ids.retain(|id| *id != orphan_id);
-                                                            }
-                                                        },
-                                                        disabled: *isSubmitting.read()
-                                                    }
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        "stroke-width": 2,
+                                        d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                    }
+                                }
 
-                                                    label {
-                                                        r#for: "tag-{orphan_tag.id.unwrap()}",
-                                                        class: "ml-2 block text-sm text-gray-700",
-                                                        "{orphan_tag.name}"
-                                                    }
-                                                }
+                                "Add Tag"
+                            }
+
+                            if *show_tag_selector.read() {
+                                div {
+                                    class: "mt-3 p-3 border border-gray-200 rounded-md bg-gray-50",
+
+                                    div {
+                                        class: "max-h-48 overflow-y-auto space-y-1",
+                                        for tag in available_tags_to_show().iter().cloned() {
+                                            button {
+                                                r#type: "button",
+                                                class: "w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                                                onclick: move |_| {
+                                                    let mut ids = selected_tag_ids.write();
+                                                    ids.push(tag.id.unwrap());
+                                                    *show_tag_selector.write() = false;
+                                                },
+                                                disabled: *isSubmitting.read(),
+                                                "{tag.name}"
                                             }
                                         }
+                                    }
+
+                                    button {
+                                        r#type: "button",
+                                        class: "mt-2 text-sm text-gray-500 hover:text-gray-700",
+                                        onclick: move |_| {
+                                            *show_tag_selector.write() = false;
+                                        },
+
+                                        "Cancel"
                                     }
                                 }
                             }

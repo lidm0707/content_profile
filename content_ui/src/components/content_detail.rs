@@ -1,5 +1,5 @@
-use crate::contexts::{ContentContext, TagContext};
 use crate::routes::Route;
+use content_sdk::contexts::{ContentContext, TagContext};
 use content_sdk::models::{Content, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 use content_sdk::utils::render_markdown_to_html;
 use dioxus::prelude::*;

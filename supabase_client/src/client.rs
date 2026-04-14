@@ -86,13 +86,18 @@ pub async fn get<T: DeserializeOwned>(
 ) -> Result<Vec<T>, String> {
     let url = build_url(config, table, params)?;
 
-    Request::get(&url)
+    let response_text = Request::get(&url)
         .headers(build_headers(config, false)?)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch data: {}", e))?
-        .json::<Vec<T>>()
+        .text()
         .await
+        .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+    tracing::debug!("Raw response from {}: {}", url, response_text);
+
+    serde_json::from_str::<Vec<T>>(&response_text)
         .map_err(|e| format!("Failed to parse response: {}", e))
 }
 

@@ -1,9 +1,6 @@
-use dioxus::prelude::Props;
-use dioxus::signals::{ReadableExt, Signal};
-
-use content_sdk::models::{Content, ContentRequest};
-use content_sdk::services::ContentService;
-use content_sdk::utils::config::Config;
+use crate::models::{Content, ContentRequest};
+use crate::services::ContentService;
+use crate::utils::config::Config;
 use dioxus::prelude::*;
 
 /// Content context for managing content state across the app

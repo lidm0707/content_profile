@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 
 mod app;
 mod components;
-mod contexts;
+
 mod pages;
 mod routes;
 

@@ -58,9 +58,6 @@ pub struct UseContent {
     resource: Resource<Result<Vec<Content>, String>>,
     /// Signal for filtering by status
     filter_status: Signal<Option<String>>,
-    /// Signal for filtering by tag IDs
-    filter_tags: Signal<Option<Vec<i32>>>,
-
     /// Signal for search query
     search_query: Signal<Option<String>>,
     /// Supabase client config
@@ -103,7 +100,6 @@ impl UseContent {
         Self {
             resource,
             filter_status: use_signal(|| None),
-            filter_tags: use_signal(|| None),
             search_query: use_signal(|| None),
             config,
             table,
@@ -137,17 +133,6 @@ impl UseContent {
         self.filter_status.read().clone()
     }
 
-    /// Sets tag filter
-    pub fn set_tag_filter(&mut self, tags: Option<Vec<i32>>) {
-        info!("Setting tag filter: {:?}", tags);
-        *self.filter_tags.write() = tags;
-    }
-
-    /// Gets current tag filter
-    pub fn get_tag_filter(&self) -> Option<Vec<i32>> {
-        self.filter_tags.read().as_ref().cloned()
-    }
-
     /// Sets search query
     pub fn set_search_query(&mut self, query: Option<String>) {
         info!("Setting search query: {:?}", query);
@@ -174,20 +159,6 @@ impl UseContent {
                         .into_iter()
                         .filter(|c| c.status == *status)
                         .collect();
-                }
-
-                // Filter by tags
-                if let Some(filter_tags) = self.filter_tags.read().as_ref() {
-                    if !filter_tags.is_empty() {
-                        filtered = filtered
-                            .into_iter()
-                            .filter(|c| {
-                                c.tags.as_ref().map_or(false, |tags| {
-                                    tags.iter().any(|tag| filter_tags.contains(tag))
-                                })
-                            })
-                            .collect();
-                    }
                 }
 
                 // Filter by search query

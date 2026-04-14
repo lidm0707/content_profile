@@ -1,17 +1,22 @@
-use content_sdk::models::{ContentTag, ContentTagRequest, Tag};
-use content_sdk::services::TagService;
-use content_sdk::utils::config::Config;
+use crate::models::{ContentTag, ContentTagRequest, Tag};
+use crate::services::TagService;
+use crate::utils::config::Config;
 use dioxus::prelude::*;
-/// Tag context for managing tag state across the app
+
+/// Content tags context for managing content-tag relationships
+///
+/// This context provides a reactive interface for managing the junction table
+/// relationships between content items and tags. It handles CRUD operations
+/// on the content_tags table.
 #[derive(Clone, PartialEq, Props)]
-pub struct TagContext {
+pub struct ContentTagsContext {
     tag_service: Signal<TagService>,
 }
 
-impl TagContext {
-    /// Creates a new TagContext
+impl ContentTagsContext {
+    /// Creates a new ContentTagsContext
     pub fn new(config: Option<Config>) -> Self {
-        TagContext {
+        ContentTagsContext {
             tag_service: Signal::new(TagService::new(config)),
         }
     }
@@ -21,19 +26,30 @@ impl TagContext {
         self.tag_service.cloned()
     }
 
-    /// Fetches all tags
-    pub async fn get_all_tags(&self) -> Result<Vec<Tag>, String> {
-        let service = self.tag_service.cloned();
-        service.get_all_tags().await
-    }
-
     /// Fetches tags for a specific content item
+    ///
+    /// This method queries the content_tags junction table and returns
+    /// the actual Tag objects assigned to the given content_id.
     pub async fn get_tags_for_content(&self, content_id: i32) -> Result<Vec<Tag>, String> {
         let service = self.tag_service.cloned();
         service.get_tags_for_content(content_id).await
     }
 
+    /// Fetches content-tag junction records for a specific content item
+    ///
+    /// This method queries the content_tags junction table and returns
+    /// the ContentTag records (junction table) for the given content_id.
+    pub async fn get_content_tags_for_content(
+        &self,
+        content_id: i32,
+    ) -> Result<Vec<ContentTag>, String> {
+        let service = self.tag_service.cloned();
+        service.get_content_tags_for_content(content_id).await
+    }
+
     /// Adds a tag to a content item
+    ///
+    /// Creates a new record in the content_tags junction table.
     pub async fn add_tag_to_content(
         &mut self,
         request: ContentTagRequest,
@@ -43,6 +59,8 @@ impl TagContext {
     }
 
     /// Removes a tag from a content item
+    ///
+    /// Deletes the corresponding record in the content_tags junction table.
     pub async fn remove_tag_from_content(
         &mut self,
         content_id: i32,
@@ -53,6 +71,9 @@ impl TagContext {
     }
 
     /// Updates the tags for a content item (replaces all tags)
+    ///
+    /// This is a full replacement operation that ensures the content has
+    /// exactly the tags specified in the tag_ids vector.
     pub async fn update_content_tags(
         &mut self,
         content_id: i32,
@@ -63,7 +84,7 @@ impl TagContext {
     }
 }
 
-impl Default for TagContext {
+impl Default for ContentTagsContext {
     fn default() -> Self {
         Self::new(None)
     }

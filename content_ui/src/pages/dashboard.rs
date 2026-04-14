@@ -1,6 +1,6 @@
 use crate::components::{ContentList as ContentListComponent, StatCard};
-use crate::contexts::{ContentContext, TagContext, UserContext};
 use crate::routes::Route;
+use content_sdk::contexts::{ContentContext, TagContext, UserContext};
 use content_sdk::models::{Content, Tag};
 use dioxus::prelude::*;
 use dioxus_router::Navigator;

@@ -25,6 +25,15 @@ impl TagService {
         self.remote_service.get_tags_for_content(content_id).await
     }
 
+    pub async fn get_content_tags_for_content(
+        &self,
+        content_id: i32,
+    ) -> Result<Vec<ContentTag>, String> {
+        self.remote_service
+            .get_content_tags_for_content(content_id)
+            .await
+    }
+
     pub async fn add_tag_to_content(
         &mut self,
         request: ContentTagRequest,
@@ -140,6 +149,20 @@ impl SupabaseTagService {
             .into_iter()
             .filter(|tag| tag.id.is_some_and(|id| tag_ids.contains(&id)))
             .collect())
+    }
+
+    pub async fn get_content_tags_for_content(
+        &self,
+        content_id: i32,
+    ) -> Result<Vec<ContentTag>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+
+        get(
+            config,
+            CONTENT_TAGS_TABLE,
+            &[("content_id", &content_id.to_string())],
+        )
+        .await
     }
 
     pub async fn add_tag_to_content(

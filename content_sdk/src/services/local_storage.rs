@@ -54,7 +54,6 @@ impl LocalStorageService {
                 .map_err(|e| format!("{e} try into i32 from usize failed"))?,
         );
         content = content.with_status(content_request.status);
-        content.tags = content_request.tags;
         content.created_at = Some(now);
         content.updated_at = Some(now);
 
@@ -87,7 +86,6 @@ impl LocalStorageService {
             slug: content_request.slug,
             body: content_request.body,
             status: content_request.status,
-            tags: content_request.tags,
             created_at: contents[index].created_at,
             updated_at: Some(now),
             synced_at: contents[index].synced_at,

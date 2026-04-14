@@ -32,8 +32,9 @@
 //! ```
 
 pub mod use_content;
+pub mod use_content_tags;
 pub mod use_tags;
-
 // Re-export commonly used hooks for convenience
 pub use use_content::UseContent;
+pub use use_content_tags::UseContentTags;
 pub use use_tags::UseTags;

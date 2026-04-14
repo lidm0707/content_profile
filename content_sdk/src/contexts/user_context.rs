@@ -1,6 +1,6 @@
-use content_sdk::models::{LoginRequest, Session};
-use content_sdk::services::{AuthService, SessionStorage};
-use content_sdk::utils::config::Config;
+use crate::models::{LoginRequest, Session};
+use crate::services::{AuthService, SessionStorage};
+use crate::utils::config::Config;
 
 /// User context for managing authentication state across the app
 #[derive(Clone)]

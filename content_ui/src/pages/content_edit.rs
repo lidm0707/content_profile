@@ -1,6 +1,6 @@
 use crate::components::ContentForm;
-use crate::contexts::{ContentContext, TagContext};
 use crate::routes::Route;
+use content_sdk::contexts::ContentContext;
 use content_sdk::models::{Content, ContentRequest, Tag};
 use dioxus::prelude::*;
 use tracing::{debug, info, warn};
@@ -12,12 +12,9 @@ pub fn ContentEdit(id: i32) -> Element {
     let is_editing = id != 0;
     let mut refresh_trigger = use_context::<Signal<u64>>();
     let content_context = use_context::<ContentContext>();
-    let tag_context = use_context::<TagContext>();
 
     // Clone contexts for use in resource closures
     let content_context_for_content_resource = content_context.clone();
-    let tag_context_for_tags_resource = tag_context.clone();
-
     // Resource to fetch content if editing
     let content_resource = use_resource(move || {
         let content_context = content_context_for_content_resource.clone();
@@ -47,26 +44,6 @@ pub fn ContentEdit(id: i32) -> Element {
     let mut is_submitting = use_signal(|| false);
     let mut success_message = use_signal(|| None::<String>);
     let mut error_message = use_signal(|| None::<String>);
-
-    let tags_resource: Resource<Result<Vec<Tag>, String>> = use_resource(move || {
-        let tag_context = tag_context_for_tags_resource.clone();
-        async move { tag_context.get_all_tags().await }
-    });
-
-    let mut available_tags = use_signal(Vec::<Tag>::new);
-
-    use_effect(move || {
-        if let Some(result) = tags_resource.read().as_ref() {
-            match result {
-                Ok(tags) => {
-                    available_tags.set(tags.clone());
-                }
-                Err(_) => {
-                    available_tags.set(Vec::new());
-                }
-            }
-        }
-    });
 
     let page_title = if is_editing {
         "Edit Content".to_string()
@@ -121,8 +98,6 @@ pub fn ContentEdit(id: i32) -> Element {
         let _current_content_for_spawn = current_content.read().clone();
         let navigate_for_spawn = navigate;
         let mut content_context_for_spawn = content_context.clone();
-        let mut tag_context_for_spawn = tag_context.clone();
-        let request_tags = request.tags.clone().unwrap_or_default();
 
         // Spawn an async task to handle the submission
         async move {
@@ -138,10 +113,7 @@ pub fn ContentEdit(id: i32) -> Element {
 
             match result {
                 Ok(content) => {
-                    let content_id = content.id.unwrap();
-                    let _ = tag_context_for_spawn
-                        .update_content_tags(content_id, request_tags)
-                        .await;
+                    let _content_id = content.id.unwrap();
 
                     success_message.set(Some(if is_editing {
                         "Content updated successfully!".to_string()
@@ -329,7 +301,6 @@ pub fn ContentEdit(id: i32) -> Element {
                     // Content form
                     ContentForm {
                         content: current_content.read().clone(),
-                        available_tags: available_tags,
                         on_submit: handle_form_submit,
                         on_cancel: handle_cancel
                     }

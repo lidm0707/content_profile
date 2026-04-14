@@ -1,7 +1,7 @@
 use content_sdk::utils::config::Config;
 use dioxus::prelude::*;
 
-use crate::contexts::{ContentContext, TagContext, UserContext};
+use content_sdk::contexts::{ContentContext, ContentTagsContext, TagContext, UserContext};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
@@ -28,6 +28,10 @@ pub fn App() -> Element {
     // Create TagContext
     let tag_context = TagContext::new(Some(config.clone()));
     use_context_provider(move || tag_context.clone());
+
+    // Create ContentTagsContext
+    let content_tags_context = ContentTagsContext::new(Some(config.clone()));
+    use_context_provider(move || content_tags_context.clone());
 
     // Load saved session and create session signal
     let session_signal = use_signal(|| {

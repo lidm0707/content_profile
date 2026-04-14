@@ -89,6 +89,9 @@ pub mod hooks;
 // Re-export services
 pub mod services;
 
+// Re-export contexts
+pub mod contexts;
+
 // Re-export utils
 pub mod utils;
 
@@ -99,4 +102,7 @@ pub use models::{
 };
 
 // Re-export commonly used hooks for convenience
-pub use hooks::{UseContent, UseTags, use_content, use_tags};
+pub use hooks::{UseContent, UseContentTags, UseTags, use_content, use_content_tags, use_tags};
+
+// Re-export commonly used contexts for convenience
+pub use contexts::{ContentContext, ContentTagsContext, TagContext, UserContext};

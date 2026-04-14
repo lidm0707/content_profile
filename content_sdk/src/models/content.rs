@@ -28,7 +28,6 @@ pub struct Content {
     pub slug: String,
     pub body: String,
     pub status: String,
-    pub tags: Option<Vec<i32>>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
     #[serde(deserialize_with = "deserialize_optional_datetime")]
@@ -44,7 +43,6 @@ impl Content {
             slug,
             body,
             status: STATUS_DRAFT.to_string(),
-            tags: None,
             created_at: None,
             updated_at: None,
             synced_at: None,
@@ -97,7 +95,6 @@ pub struct ContentRequest {
     pub slug: String,
     pub body: String,
     pub status: String,
-    pub tags: Option<Vec<i32>>,
 }
 
 impl From<Content> for ContentRequest {
@@ -108,7 +105,6 @@ impl From<Content> for ContentRequest {
             slug: content.slug,
             body: content.body,
             status: content.status,
-            tags: content.tags,
         }
     }
 }
