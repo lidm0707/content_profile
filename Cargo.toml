@@ -20,7 +20,7 @@ tracing = "0.1"
 anyhow = "1.0"
 
 # Supabase client dependencies
-gloo-net = { version = "0.6", features = ["http"] }
+gloo-net = { version = "0.7", features = ["http"] }
 regex = "1.10"
 url = "2.5"
 # UI dependencies

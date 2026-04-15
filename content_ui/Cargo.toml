@@ -1,19 +1,20 @@
 [package]
 name = "content_ui"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
 # Dioxus dependencies
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { version = "0.7", features = ["web","router"] }
 
 # Shared dependencies
-serde = { workspace = true }
-serde_json = { workspace = true }
-chrono = { workspace = true }
-tracing = { workspace = true }
-anyhow = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+log = "0.4.29"
+
+anyhow = "1.0"
 
 # Content SDK
 content_sdk = { path = "../content_sdk" }
@@ -22,25 +23,23 @@ content_sdk = { path = "../content_sdk" }
 supabase_client = { path = "../supabase_client" }
 
 # Web dependencies
-gloo-net = { workspace = true }
-web-sys = { workspace = true }
-gloo-timers = { workspace = true }
-lazy_static = { workspace = true }
-base64 = { workspace = true }
-log = { workspace = true }
-tracing-wasm = { workspace = true }
-console_log = { workspace = true }
-getrandom = { workspace = true, optional = true }
-url = { workspace = true }
-pulldown-cmark = "0.13.3"
 
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
+lazy_static = "1.4"
+base64 = "0.22"
+console_log = "1.0"
+tracing-wasm = "0.2"
+getrandom = { version = "0.2", features = ["js"], optional = true }
+url = "2.5"
+pulldown-cmark = "0.13.3"
+gloo-net = { version = "0.7", features = ["http"] }
+gloo-timers = "0.3"
 
 
 [features]
 default = ["web"]
 web = ["dioxus/web", "getrandom/js"]
-desktop = ["dioxus/desktop", "getrandom"]
 
 
 [build-dependencies]
-dotenvy = { workspace = true }
+dotenvy = "0.15"
