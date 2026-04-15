@@ -7,6 +7,9 @@ const TAGS_KEY: &str = "tags";
 
 /// Converts markdown text to HTML, properly handling newlines
 ///
+/// Newlines (\n) are converted to line breaks by adding two spaces before them,
+/// which markdown parsers interpret as `<br>` tags.
+///
 /// # Arguments
 /// * `markdown` - The markdown text to convert
 ///
@@ -15,11 +18,15 @@ const TAGS_KEY: &str = "tags";
 ///
 /// # Examples
 /// ```ignore
-/// let html = render_markdown_to_html("Hello\n\nWorld");
-/// // Returns: "<p>Hello</p>\n<p>World</p>"
+/// let html = render_markdown_to_html("Hello\nWorld");
+/// // Returns: "<p>Hello<br>World</p>"
 /// ```
 pub fn render_markdown_to_html(markdown: &str) -> String {
-    let parser = Parser::new(markdown);
+    // Pre-process markdown to convert newlines to line breaks
+    // Two spaces at end of line + newline = <br> in markdown
+    let processed_markdown = markdown.replace("\n", "  \n");
+
+    let parser = Parser::new(&processed_markdown);
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
     html_output
@@ -225,9 +232,11 @@ Hello world"#;
     fn test_render_markdown_to_html_single_newline() {
         let markdown = "Hello\nWorld";
         let html = render_markdown_to_html(markdown);
-        // Single newline within text should be preserved in paragraph
+        println!("Single newline HTML output: {}", html);
+        // Single newline should create line break (<br>)
         assert!(html.contains("<p>"));
         assert!(html.contains("Hello"));
+        assert!(html.contains("<br>"));
         assert!(html.contains("World"));
     }
 
@@ -236,6 +245,7 @@ Hello world"#;
         let markdown = "Hello\n\nWorld";
         let html = render_markdown_to_html(markdown);
         // Double newline should create separate paragraphs
+        assert!(html.contains("<p>"));
         assert!(html.contains("<p>Hello</p>"));
         assert!(html.contains("<p>World</p>"));
     }
@@ -244,6 +254,7 @@ Hello world"#;
     fn test_render_markdown_to_html_with_bold() {
         let markdown = "**Bold** text";
         let html = render_markdown_to_html(markdown);
+        println!("Bold HTML output: {}", html);
         assert!(html.contains("<strong>Bold</strong>"));
     }
 
