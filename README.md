@@ -225,7 +225,9 @@ dx serve --platform desktop
 
 ## 📊 Database Schema
 
-The application uses a single `content` table with the following structure:
+The application uses three tables to manage content, tags, and their relationships:
+
+### Content Table
 
 ```sql
 CREATE TABLE content (
@@ -239,7 +241,7 @@ CREATE TABLE content (
 );
 ```
 
-### Fields Description
+#### Fields Description
 
 - **id**: Auto-incrementing primary key
 - **title**: Content title (required)
@@ -249,11 +251,216 @@ CREATE TABLE content (
 - **created_at**: Timestamp of content creation
 - **updated_at**: Timestamp of last update
 
-### Status Values
+#### Status Values
 
 - `draft`: Content is in draft mode (not publicly visible)
 - `published`: Content is published and publicly visible
 - `archived`: Content is archived (hidden from public view)
+
+### Tags Table
+
+```sql
+CREATE TABLE tags (
+    id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    parent_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    synced_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### Fields Description
+
+- **id**: Auto-incrementing primary key
+- **name**: Tag display name (required)
+- **slug**: URL-friendly tag identifier (required, unique)
+- **parent_id**: Optional parent tag ID for hierarchical tags
+- **created_at**: Timestamp of tag creation
+- **updated_at**: Timestamp of last update
+- **synced_at**: Timestamp of last sync with remote
+
+### Content Tags Junction Table
+
+```sql
+CREATE TABLE content_tags (
+    id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    content_id INTEGER NOT NULL REFERENCES content(id) ON DELETE CASCADE,
+    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    UNIQUE(content_id, tag_id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### Fields Description
+
+- **id**: Auto-incrementing primary key
+- **content_id**: Foreign key to content table (required, cascades on delete)
+- **tag_id**: Foreign key to tags table (required, cascades on delete)
+- **UNIQUE**: Ensures same tag can't be assigned to same content multiple times
+- **created_at**: Timestamp of relationship creation
+
+## 🔷 Data Models (Rust Structs)
+
+### Content Models
+
+#### Content Struct
+
+Represents a CMS content item with all database fields.
+
+```rust
+pub struct Content {
+    pub id: Option<i32>,
+    pub title: String,
+    pub slug: String,
+    pub body: String,
+    pub status: String,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub synced_at: Option<DateTime<Utc>>,
+}
+```
+
+#### ContentRequest Struct
+
+Request structure for creating/updating content via API.
+
+```rust
+pub struct ContentRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i32>,
+    pub title: String,
+    pub slug: String,
+    pub body: String,
+    pub status: String,
+}
+```
+
+### Tag Models
+
+#### Tag Struct
+
+Represents a hierarchical tag with optional parent.
+
+```rust
+pub struct Tag {
+    pub id: Option<i32>,
+    pub name: String,
+    pub slug: String,
+    pub parent_id: Option<i32>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub synced_at: Option<DateTime<Utc>>,
+}
+```
+
+#### TagRequest Struct
+
+Request structure for creating/updating tags via API.
+
+```rust
+pub struct TagRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<i32>,
+    pub name: String,
+    pub slug: String,
+    pub parent_id: Option<i32>,
+}
+```
+
+### Content Tag Models
+
+#### ContentTag Struct
+
+Represents the many-to-many relationship between content and tags.
+
+```rust
+pub struct ContentTag {
+    pub id: Option<i32>,
+    pub content_id: i32,
+    pub tag_id: i32,
+    pub created_at: Option<DateTime<Utc>>,
+}
+```
+
+#### ContentTagRequest Struct
+
+Request structure for creating content-tag relationships via API.
+
+```rust
+pub struct ContentTagRequest {
+    pub content_id: i32,
+    pub tag_id: i32,
+}
+```
+
+### Authentication Models
+
+#### User Struct
+
+User information from Supabase Auth.
+
+```rust
+pub struct User {
+    pub id: String,
+    pub email: String,
+    pub email_confirmed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_sign_in_at: Option<String>,
+}
+```
+
+#### Session Struct
+
+Session information including tokens and user data.
+
+```rust
+pub struct Session {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_at: i64,
+    pub token_type: String,
+    pub user: User,
+}
+```
+
+#### LoginRequest Struct
+
+Login request payload for authentication.
+
+```rust
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+}
+```
+
+#### AuthResponse Struct
+
+Supabase Auth API response for login/signup operations.
+
+```rust
+pub struct AuthResponse {
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<i64>,
+    pub token_type: Option<String>,
+    pub user: User,
+}
+```
+
+#### AuthError Struct
+
+Error response from Supabase Auth operations.
+
+```rust
+pub struct AuthError {
+    pub error: String,
+    pub error_description: String,
+}
+```
 
 ## 🎯 Usage Guide
 
