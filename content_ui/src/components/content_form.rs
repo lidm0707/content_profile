@@ -179,12 +179,11 @@ fn TagBadge(tag_id: i32, tag: Tag, tag_to_remove: Signal<Option<(i32, String)>>)
             }
             button {
                 r#type: "button",
-                class: "ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150",
+                class: "ml-1 flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150 cursor-pointer",
                 onclick: move |_| {
                     debug!("Tag remove clicked: id={}, name={}", tag_id, tag.name);
                     tag_to_remove.set(Some((tag_id, tag.name.clone())));
                 },
-                disabled: false,
                 title: "Remove tag",
 
                 svg {
@@ -344,71 +343,70 @@ fn RemoveTagConfirmationModal(
     tag_to_remove: Signal<Option<(i32, String)>>,
     selected_tag_ids: Signal<Vec<i32>>,
     is_submitting: ReadSignal<bool>,
+    content_id: Option<i32>,
+    content_tags_context: ContentTagsContext,
 ) -> Element {
+    debug!(
+        "RemoveTagConfirmationModal rendered - tag_id: {}, tag_name: {}, content_id: {:?}",
+        tag_id, tag_name, content_id
+    );
+    let mut is_removing = use_signal(|| false);
     rsx! {
     div {
-        class: "fixed inset-0 z-50 overflow-y-auto",
+        class: "fixed inset-0 z-50 flex items-center justify-center overflow-y-auto",
         div {
-            class: "flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0",
+            class: "fixed inset-0 bg-gray-500/30 transition-opacity z-40",
+            onclick: move |_| {
+                tag_to_remove.set(None);
+            }
+        }
+
+        div {
+            class: "relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-lg w-full mx-4 z-50",
 
             div {
-                class: "fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40",
-                onclick: move |_| {
-                    tag_to_remove.set(None);
-                }
-            }
-
-            span {
-                class: "hidden sm:inline-block sm:align-middle sm:h-screen",
-                "​"
-            }
-
-            div {
-                class: "inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50",
+                class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
 
                 div {
-                    class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
+                    class: "sm:flex sm:items-start",
 
                     div {
-                        class: "sm:flex sm:items-start",
+                        class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
 
-                        div {
-                            class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
+                        svg {
+                            class: "h-6 w-6 text-red-600",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            stroke: "currentColor",
 
-                            svg {
-                                class: "h-6 w-6 text-red-600",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke: "currentColor",
-
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    stroke_width: 2,
-                                    d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                }
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: 2,
+                                d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                             }
+                        }
+                }
+
+                div {
+                        class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
+
+                        h3 {
+                            class: "text-lg leading-6 font-medium text-gray-900",
+                            "Remove Tag"
                         }
 
                         div {
-                            class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
+                            class: "mt-2",
 
-                            h3 {
-                                class: "text-lg leading-6 font-medium text-gray-900",
-                                "Remove Tag"
-                            }
-
-                            div {
-                                class: "mt-2",
-
-                                p {
-                                    class: "text-sm text-gray-500",
-                                    "Are you sure you want to remove the tag \"{tag_name}\"? This action can be undone by adding the tag back."
-                                }
+                            p {
+                                class: "text-sm text-gray-500",
+                                "Are you sure you want to remove the tag \"{tag_name}\"? This action can be undone by adding the tag back."
                             }
                         }
                     }
                 }
+            }
 
                 div {
                     class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
@@ -417,12 +415,35 @@ fn RemoveTagConfirmationModal(
                         r#type: "button",
                         class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm",
                         onclick: move |_| {
+                            is_removing.set(true);
+                            let mut context_for_spawn = content_tags_context.clone();
+                            let tag_id_for_spawn = tag_id;
+                            let mut tag_to_remove_for_spawn = tag_to_remove.clone();
+                            let mut is_removing_for_spawn = is_removing.clone();
+
+                            spawn(async move {
+                                if let Some(content_id) = content_id {
+                                    if let Err(err) = context_for_spawn.remove_tag_from_content(content_id, tag_id_for_spawn).await {
+                                        error!("Failed to remove tag from content: {}", err);
+                                        is_removing_for_spawn.set(false);
+                                        return;
+                                    }
+                                }
+
+                                tag_to_remove_for_spawn.set(None);
+                                is_removing_for_spawn.set(false);
+                            });
+
                             let mut ids = selected_tag_ids.write();
                             ids.retain(|id| *id != tag_id);
-                            tag_to_remove.set(None);
                         },
+                        disabled: *is_removing.read(),
 
-                        "Remove"
+                        if *is_removing.read() {
+                            "Removing..."
+                        } else {
+                            "Remove"
+                        }
                     }
 
                     button {
@@ -437,8 +458,7 @@ fn RemoveTagConfirmationModal(
                 }
             }
         }
-    }
-    }
+        }
 }
 
 /// Confirmation modal for clearing all tags
@@ -550,6 +570,7 @@ fn ClearAllTagsConfirmationModal(
 pub fn ContentForm(props: ContentFormProps) -> Element {
     let tag_context = use_context::<TagContext>();
     let content_tags_context = use_context::<ContentTagsContext>();
+    let content_tags_context_for_resource = content_tags_context.clone();
 
     debug!("ContentForm rendered");
 
@@ -619,7 +640,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     // Fetch content_tags using resource
     let content_tags_resource = use_resource(move || {
         let content_id = props.content.read().as_ref().and_then(|c| c.id);
-        let context = content_tags_context.clone();
+        let context = content_tags_context_for_resource.clone();
         async move {
             debug!("Fetching content_tags for content_id: {:?}", content_id);
             if let Some(id) = content_id {
@@ -1039,13 +1060,17 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         }
 
         // Remove tag confirmation modal
+        { debug!("ContentForm render - tag_to_remove value: {:?}", tag_to_remove.read()); }
         if let Some((tag_id, tag_name)) = tag_to_remove.read().as_ref().cloned() {
+            { debug!("Rendering RemoveTagConfirmationModal with tag_id: {}, tag_name: {}", tag_id, tag_name); }
             RemoveTagConfirmationModal {
                 tag_id,
                 tag_name,
                 tag_to_remove,
                 selected_tag_ids,
                 is_submitting: isSubmitting,
+                content_id: props.content.read().as_ref().and_then(|c| c.id),
+                content_tags_context: content_tags_context.clone(),
             }
         }
      // Clear all tags confirmation modal
