@@ -1,4 +1,5 @@
 use crate::models::{Content, ContentRequest};
+
 use crate::services::{LocalStorageService, SupabaseService};
 use crate::utils::config::{AppMode, Config};
 use dioxus::prelude::*;
@@ -151,6 +152,93 @@ impl ContentService {
     /// Gets remote storage service directly
     pub fn remote_service(&self) -> &SupabaseService {
         &self.remote_service
+    }
+
+    /// Fetches content with pagination
+    pub async fn get_paginated_content(
+        &self,
+        filters: &[(&str, &str)],
+        page: u32,
+        page_size: u32,
+    ) -> Result<crate::pagination::PaginatedResponse<Content>, String> {
+        debug!(
+            "Getting paginated content page {} size {} (mode: {:?})",
+            page, page_size, self.mode
+        );
+
+        let offset = (page - 1) * page_size;
+
+        match self.mode {
+            AppMode::Office => {
+                trace!("Using LocalStorageService for get_paginated_content");
+                let all_content = self.local_service.get_all_content()?;
+                let total_items = all_content.len() as u32;
+
+                let mut filtered: Vec<Content> = all_content;
+                for (key, value) in filters {
+                    filtered.retain(|c| match *key {
+                        "status" => c.status == *value,
+                        _ => true,
+                    });
+                }
+
+                let total_filtered = filtered.len() as u32;
+                let start = offset as usize;
+                let end = (offset + page_size) as usize;
+
+                let data = if start >= filtered.len() {
+                    Vec::new()
+                } else {
+                    filtered[start..end.min(filtered.len())].to_vec()
+                };
+
+                Ok(crate::pagination::PaginatedResponse::new(
+                    data,
+                    &crate::pagination::PaginationParams::new(page, page_size),
+                    total_filtered,
+                ))
+            }
+            AppMode::Supabase => {
+                trace!("Using SupabaseService for get_paginated_content");
+                let data = self
+                    .remote_service
+                    .get_paginated_content(filters, offset, page_size)
+                    .await?;
+                let total_items = self.remote_service.count_content(filters).await?;
+
+                Ok(crate::pagination::PaginatedResponse::new(
+                    data,
+                    &crate::pagination::PaginationParams::new(page, page_size),
+                    total_items,
+                ))
+            }
+        }
+    }
+
+    /// Counts total content items
+    pub async fn count_content(&self, filters: &[(&str, &str)]) -> Result<u32, String> {
+        debug!("Counting content (mode: {:?})", self.mode);
+
+        match self.mode {
+            AppMode::Office => {
+                trace!("Using LocalStorageService for count_content");
+                let all_content = self.local_service.get_all_content()?;
+                let filtered: Vec<Content> = all_content
+                    .into_iter()
+                    .filter(|c| {
+                        filters.iter().all(|(key, value)| match *key {
+                            "status" => c.status == *value,
+                            _ => true,
+                        })
+                    })
+                    .collect();
+                Ok(filtered.len() as u32)
+            }
+            AppMode::Supabase => {
+                trace!("Using SupabaseService for count_content");
+                self.remote_service.count_content(filters).await
+            }
+        }
     }
 }
 

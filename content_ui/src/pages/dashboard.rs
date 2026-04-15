@@ -181,11 +181,25 @@ pub fn Dashboard() -> Element {
         }
     });
 
-    // let refresh_trigger: Signal<u64> = use_context::<Signal<u64>>();
     let content_context: ContentContext = use_context();
+    let mut current_page = use_signal(|| 1);
+    let page_size = 9;
+
+    let contents_context = content_context.clone();
     let mut contents = use_resource(move || {
-        let content_context = content_context.clone();
-        async move { content_context.get_all_content().await }
+        let content_context = contents_context.clone();
+        let page = current_page();
+        async move {
+            content_context
+                .get_paginated_content(&[], page, page_size)
+                .await
+        }
+    });
+
+    let count_context = content_context.clone();
+    let mut total_count = use_resource(move || {
+        let content_context = count_context.clone();
+        async move { content_context.count_content(&[]).await }
     });
 
     let mut error_message = use_signal(|| None::<String>);
@@ -205,7 +219,7 @@ pub fn Dashboard() -> Element {
             match result {
                 Ok(data) => {
                     error_message.set(None);
-                    contents_data.set(data.clone());
+                    contents_data.set(data.data.clone());
                 }
                 Err(err) => {
                     error_message.set(Some(err.clone()));
@@ -217,6 +231,32 @@ pub fn Dashboard() -> Element {
     let handle_refresh = move |_| {
         contents.restart();
         tags.restart();
+        total_count.restart();
+    };
+
+    let handle_previous_page = move |_| {
+        if current_page() > 1 {
+            current_page -= 1;
+        }
+    };
+
+    let handle_next_page = move |_| {
+        let current = current_page();
+        let total = total_count
+            .read()
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .copied()
+            .unwrap_or(0);
+        let max_page = if total > 0 {
+            (total + page_size - 1) / page_size
+        } else {
+            1
+        };
+
+        if current < max_page {
+            current_page += 1;
+        }
     };
 
     rsx! {
@@ -240,7 +280,7 @@ pub fn Dashboard() -> Element {
 
                 StatCard {
                     label: "Total Content".to_string(),
-                    value: contents_data.read().len().to_string(),
+                    value: total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0).to_string(),
                     value_color: "text-gray-900".to_string(),
                 }
 
@@ -356,6 +396,136 @@ pub fn Dashboard() -> Element {
                     // Content list
                     ContentListComponent {
                         contents: contents_data.read().clone()
+                    }
+
+                    // Pagination controls
+                    {
+                        let total = total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0);
+                        let current = current_page();
+                        let max_page = if total > 0 {
+                            (total + page_size - 1) / page_size
+                        } else {
+                            1
+                        };
+
+                        if max_page > 1 {
+                            Some(rsx! {
+                                div {
+                                    class: "mt-8 flex items-center justify-between border-t border-gray-200 pt-4",
+
+                                    div {
+                                        class: "flex-1 flex justify-between sm:hidden",
+
+                                        button {
+                                            disabled: current == 1,
+                                            onclick: handle_previous_page,
+                                            class: if current == 1 {
+                                                "relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-gray-50 cursor-not-allowed"
+                                            } else {
+                                                "relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                                            },
+                                            "Previous"
+                                        }
+
+                                        button {
+                                            disabled: current == max_page,
+                                            onclick: handle_next_page,
+                                            class: if current == max_page {
+                                                "ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-gray-50 cursor-not-allowed"
+                                            } else {
+                                                "ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                                            },
+                                            "Next"
+                                        }
+                                    }
+
+                                    div {
+                                        class: "hidden sm:flex-1 sm:flex sm:items-center sm:justify-between",
+
+                                        div {
+                                            p {
+                                                class: "text-sm text-gray-700",
+                                                "Showing ",
+                                                span {
+                                                    class: "font-medium",
+                                                    "{(current - 1) * page_size + 1}"
+                                                },
+                                                " to ",
+                                                span {
+                                                    class: "font-medium",
+                                                    "{current * page_size.min(total)}"
+                                                },
+                                                " of ",
+                                                span {
+                                                    class: "font-medium",
+                                                    "{total}"
+                                                },
+                                                " results"
+                                            }
+                                        }
+
+                                        div {
+                                            div {
+                                                class: "inline-flex rounded-md shadow-sm -space-x-px",
+
+                                                button {
+                                                    disabled: current == 1,
+                                                    onclick: handle_previous_page,
+                                                    class: if current == 1 {
+                                                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
+                                                    } else {
+                                                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                                                    },
+
+                                                    svg {
+                                                        class: "h-5 w-5",
+                                                        fill: "none",
+                                                        stroke: "currentColor",
+                                                        view_box: "0 0 24 24",
+                                                        path {
+                                                            stroke_linecap: "round",
+                                                            stroke_linejoin: "round",
+                                                            "stroke-width": 2,
+                                                            d: "M15 19l-7-7 7-7"
+                                                        }
+                                                    }
+                                                }
+
+                                                span {
+                                                    class: "relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700",
+                                                    "Page {current} of {max_page}"
+                                                }
+
+                                                button {
+                                                    disabled: current == max_page,
+                                                    onclick: handle_next_page,
+                                                    class: if current == max_page {
+                                                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
+                                                    } else {
+                                                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                                                    },
+
+                                                    svg {
+                                                        class: "h-5 w-5",
+                                                        fill: "none",
+                                                        stroke: "currentColor",
+                                                        view_box: "0 0 24 24",
+                                                        path {
+                                                            stroke_linecap: "round",
+                                                            stroke_linejoin: "round",
+                                                            "stroke-width": 2,
+                                                            d: "M9 5l7 7-7 7"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            })
+                        } else {
+                            None
+                        }
                     }
                 }
             }

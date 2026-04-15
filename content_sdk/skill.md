@@ -402,6 +402,346 @@ Use this pattern when:
 - Displaying multiple content items from a list
 - Implementing batch operations that would otherwise cause N+1 queries
 
+## Pagination
+
+The Content SDK provides built-in pagination support for efficiently handling large datasets. Pagination is handled through `PaginationParams` and `PaginatedResponse` types, and integrated into `ContentContext`.
+
+### Pagination Types
+
+```rust
+use content_sdk::pagination::{PaginationParams, PaginatedResponse};
+
+/// Request parameters for pagination
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaginationParams {
+    pub page: u32,
+    pub page_size: u32,
+}
+
+impl PaginationParams {
+    pub fn new(page: u32, page_size: u32) -> Self;
+}
+
+impl Default for PaginationParams {
+    fn default() -> Self {
+        Self { page: 1, page_size: 10 }
+    }
+}
+
+/// Response containing paginated data and metadata
+#[derive(Debug, Clone, PartialEq)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub total: u32,
+    pub page: u32,
+    pub page_size: u32,
+    pub total_pages: u32,
+}
+```
+
+### Using Pagination with ContentContext
+
+```rust
+use content_sdk::contexts::ContentContext;
+use content_sdk::pagination::PaginationParams;
+use dioxus::prelude::*;
+
+#[component]
+fn ContentList() -> Element {
+    let content_context: ContentContext = use_context();
+    let mut current_page = use_signal(|| 1);
+    let page_size = 9;
+
+    // Fetch paginated content
+    let mut contents = use_resource(move || {
+        let content_context = content_context.clone();
+        let page = current_page();
+        async move {
+            content_context
+                .get_paginated_content(&[], page, page_size)
+                .await
+        }
+    });
+
+    // Fetch total count
+    let mut total_count = use_resource(move || {
+        let content_context = content_context.clone();
+        async move { content_context.count_content(&[]).await }
+    });
+
+    rsx! {
+        div {
+            // Display content items
+            if let Some(result) = contents.read().as_ref() {
+                match result {
+                    Ok(response) => rsx! {
+                        div {
+                            class: "grid grid-cols-1 md:grid-cols-3 gap-6",
+                            for item in response.data.iter() {
+                                ContentCard { content: item.clone() }
+                            }
+                        }
+
+                        // Pagination controls
+                        PaginationControls {
+                            current_page: current_page(),
+                            total_count: total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0),
+                            page_size,
+                            on_previous: move |_| {
+                                if current_page() > 1 {
+                                    current_page -= 1;
+                                }
+                            },
+                            on_next: move |_| {
+                                let current = current_page();
+                                let total = total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0);
+                                let max_page = if total > 0 {
+                                    (total + page_size - 1) / page_size
+                                } else {
+                                    1
+                                };
+                                if current < max_page {
+                                    current_page += 1;
+                                }
+                            },
+                        }
+                    },
+                    Err(e) => rsx! { div { "Error: {e}" } },
+                }
+            } else {
+                div { "Loading..." }
+            }
+        }
+    }
+}
+
+#[component]
+fn PaginationControls(
+    current_page: u32,
+    total_count: u32,
+    page_size: u32,
+    on_previous: EventHandler<MouseEvent>,
+    on_next: EventHandler<MouseEvent>,
+) -> Element {
+    let max_page = if total_count > 0 {
+        (total_count + page_size - 1) / page_size
+    } else {
+        1
+    };
+
+    if max_page <= 1 {
+        return rsx! { None };
+    }
+
+    rsx! {
+        div {
+            class: "flex items-center justify-between border-t border-gray-200 pt-4",
+
+            div {
+                p {
+                    class: "text-sm text-gray-700",
+                    "Showing ",
+                    span { class: "font-medium", "{(current_page - 1) * page_size + 1}" },
+                    " to ",
+                    span { class: "font-medium", "{current_page * page_size.min(total_count)}" },
+                    " of ",
+                    span { class: "font-medium", "{total_count}" },
+                    " results"
+                }
+            }
+
+            div {
+                class: "inline-flex rounded-md shadow-sm -space-x-px",
+
+                button {
+                    disabled: current_page == 1,
+                    onclick: on_previous,
+                    class: if current_page == 1 {
+                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
+                    } else {
+                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    },
+                    "Previous"
+                }
+
+                span {
+                    class: "relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700",
+                    "Page {current_page} of {max_page}"
+                }
+
+                button {
+                    disabled: current_page == max_page,
+                    onclick: on_next,
+                    class: if current_page == max_page {
+                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
+                    } else {
+                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    },
+                    "Next"
+                }
+            }
+        }
+    }
+}
+```
+
+### Pagination with Filters
+
+```rust
+use content_sdk::contexts::ContentContext;
+use dioxus::prelude::*;
+
+#[component]
+fn FilteredContentList() -> Element {
+    let content_context: ContentContext = use_context();
+    let mut current_page = use_signal(|| 1);
+    let page_size = 10;
+    let mut status_filter = use_signal(|| None::<String>);
+
+    let mut contents = use_resource(move || {
+        let content_context = content_context.clone();
+        let page = current_page();
+        let status = status_filter();
+        async move {
+            let filters = if let Some(status) = status {
+                vec![("status", status.as_str())]
+            } else {
+                vec![]
+            };
+            content_context
+                .get_paginated_content(&filters, page, page_size)
+                .await
+        }
+    });
+
+    rsx! {
+        div {
+            // Status filter
+            select {
+                value: "{status_filter.read().as_deref().unwrap_or_default()}",
+                onchange: move |e| {
+                    status_filter.set(if e.value().is_empty() { None } else { Some(e.value()) });
+                    current_page.set(1); // Reset to first page when filter changes
+                },
+                option { value: "", "All Status" }
+                option { value: "published", "Published" }
+                option { value: "draft", "Draft" }
+                option { value: "archived", "Archived" }
+            }
+
+            // Content grid
+            if let Some(result) = contents.read().as_ref() {
+                match result {
+                    Ok(response) => rsx! {
+                        div {
+                            class: "grid grid-cols-1 md:grid-cols-3 gap-6",
+                            for item in response.data.iter() {
+                                ContentCard { content: item.clone() }
+                            }
+                        }
+                    },
+                    Err(e) => rsx! { div { "Error: {e}" } },
+                }
+            }
+        }
+    }
+}
+```
+
+### Pagination Best Practices
+
+#### Page Size Selection
+
+```rust
+// ✅ GOOD - Choose page size based on your layout
+const PAGE_SIZE: u32 = 9; // 3x3 grid
+const PAGE_SIZE: u32 = 12; // 3x4 grid or 4x3 grid
+const PAGE_SIZE: u32 = 20; // List view
+
+// ❌ BAD - Too large page size causes performance issues
+const PAGE_SIZE: u32 = 1000; // Will be slow
+```
+
+#### Reset Page on Filter Change
+
+```rust
+// ✅ GOOD - Reset page when filters change
+onchange: move |e| {
+    status_filter.set(Some(e.value()));
+    current_page.set(1); // Reset to first page
+}
+
+// ❌ BAD - Don't reset page
+onchange: move |e| {
+    status_filter.set(Some(e.value()));
+    // User might be on page 5 with only 1 page of filtered results
+}
+```
+
+#### Handle Empty Results
+
+```rust
+// ✅ GOOD - Show appropriate message when no results
+if response.data.is_empty() {
+    return rsx! {
+        div {
+            class: "text-center py-8",
+            p { class: "text-gray-500", "No content found" }
+        }
+    };
+}
+
+// ❌ BAD - Empty state without feedback
+if response.data.is_empty() {
+    return rsx! { div { } }; // Users won't know what happened
+}
+```
+
+#### Use Total Count for Stats
+
+```rust
+// ✅ GOOD - Use count_content() for accurate stats
+let total_count = use_resource(move || {
+    let content_context = content_context.clone();
+    async move { content_context.count_content(&[]).await }
+});
+
+rsx! {
+    StatCard {
+        label: "Total Content".to_string(),
+        value: total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0).to_string(),
+    }
+}
+
+// ❌ BAD - Use current page data for total stats
+StatCard {
+    label: "Total Content".to_string(),
+    value: response.data.len().to_string(), // Only shows current page
+}
+```
+
+### Pagination Validation
+
+```rust
+use content_sdk::pagination::PaginationParams;
+
+// PaginationParams automatically validates:
+// - page is clamped to minimum 1
+// - page_size is clamped between 1 and 100
+
+// These will be automatically corrected:
+let params = PaginationParams::new(0, 50); // page becomes 1
+let params = PaginationParams::new(1, 0);   // page_size becomes 1
+let params = PaginationParams::new(1, 200); // page_size becomes 100
+```
+
+### Performance Considerations
+
+1. **Office Mode**: Pagination is performed in-memory on all fetched data
+2. **Supabase Mode**: Pagination is performed server-side with `offset` and `limit` query parameters
+3. **Separate Count Call**: `count_content()` makes a separate GET request for accurate total counts
+4. **Filter Support**: Pagination works seamlessly with filters - filters are applied before pagination
+
 ## Supabase Client Configuration
 
 ### Basic Configuration
@@ -691,6 +1031,28 @@ match content.read() {
 ```
 
 ## API Reference
+
+### Pagination Types
+
+| Type | Description |
+|------|-------------|
+| `PaginationParams` | Request parameters for pagination (page, page_size) |
+| `PaginatedResponse<T>` | Response with paginated data and metadata |
+
+### ContentContext Methods
+
+| Method | Description | Returns |
+|--------|-------------|---------|
+| `get_all_content()` | Fetch all content (uses default pagination) | `Result<Vec<Content>>` |
+| `get_paginated_content(filters, page, page_size)` | Fetch paginated content | `Result<PaginatedResponse<Content>>` |
+| `count_content(filters)` | Count total content items | `Result<u32>` |
+| `get_content_by_id(id)` | Fetch single content by ID | `Result<Option<Content>>` |
+| `get_content_by_slug(slug)` | Fetch single content by slug | `Result<Option<Content>>` |
+| `get_content_by_status(status)` | Fetch content by status | `Result<Vec<Content>>` |
+| `get_content_by_ids(ids)` | Batch fetch content by IDs | `Result<Vec<Content>>` |
+| `create_content(request)` | Create new content | `Result<Content>` |
+| `update_content(id, request)` | Update existing content | `Result<Content>` |
+| `delete_content(id)` | Delete content by ID | `Result<()>` |
 
 ### UseContent Methods
 

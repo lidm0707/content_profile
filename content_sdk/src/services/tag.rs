@@ -203,7 +203,7 @@ impl SupabaseTagService {
         tracing::debug!("Request body: {}", body);
 
         let request: gloo_net::http::Request = Request::post(&url)
-            .headers(build_headers(config, true, None)?)
+            .headers(build_headers(config, true, None, false)?)
             .body(body)
             .map_err(|e| format!("Failed to build request: {}", e))?;
 

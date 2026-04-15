@@ -2,7 +2,8 @@ use crate::models::{Content, ContentRequest};
 use crate::utils::config::Config;
 use gloo_net::http::Request;
 use supabase_client::{
-    ClientConfig, build_headers, create, delete, get, get_by, get_by_id, get_by_in, update,
+    ClientConfig, build_headers, count, create, delete, get, get_by, get_by_id, get_by_in,
+    get_paginated, update,
 };
 
 #[derive(Clone)]
@@ -55,7 +56,7 @@ impl SupabaseService {
         tracing::debug!("Request body: {}", body);
 
         let request: gloo_net::http::Request = Request::post(&url)
-            .headers(build_headers(config, true, None)?)
+            .headers(build_headers(config, true, None, false)?)
             .body(body)
             .map_err(|e| format!("Failed to build request: {}", e))?;
 
@@ -122,6 +123,21 @@ impl SupabaseService {
             return Ok(Vec::new());
         }
         get_by_in::<Content>(config, "content", "id", ids).await
+    }
+
+    pub async fn get_paginated_content(
+        &self,
+        filters: &[(&str, &str)],
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<Content>, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        get_paginated::<Content>(config, "content", filters, offset, limit).await
+    }
+
+    pub async fn count_content(&self, filters: &[(&str, &str)]) -> Result<u32, String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        count(config, "content", filters).await
     }
 }
 

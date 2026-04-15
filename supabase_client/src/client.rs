@@ -9,6 +9,7 @@ const AUTHORIZATION_HEADER: &str = "Authorization";
 const CONTENT_TYPE_HEADER: &str = "Content-Type";
 const PREFER_HEADER: &str = "Prefer";
 const RETURN_REPRESENTATION: &str = "return=representation";
+const COUNT_EXACT: &str = "count=exact";
 const BEARER_PREFIX: &str = "Bearer ";
 const APPLICATION_JSON: &str = "application/json";
 
@@ -55,6 +56,7 @@ pub fn build_headers(
     config: &ClientConfig,
     prefer_return: bool,
     jwt_token: Option<&str>,
+    count: bool,
 ) -> Result<Headers, String> {
     let headers = Headers::new();
     let credential = get_credential(config, jwt_token);
@@ -65,8 +67,15 @@ pub fn build_headers(
     headers.set(AUTHORIZATION_HEADER, &auth_value);
     headers.set(CONTENT_TYPE_HEADER, APPLICATION_JSON);
 
-    if prefer_return {
+    if prefer_return && count {
+        headers.set(
+            PREFER_HEADER,
+            &format!("{},{}", RETURN_REPRESENTATION, COUNT_EXACT),
+        );
+    } else if prefer_return {
         headers.set(PREFER_HEADER, RETURN_REPRESENTATION);
+    } else if count {
+        headers.set(PREFER_HEADER, COUNT_EXACT);
     }
 
     Ok(headers)
@@ -94,7 +103,7 @@ pub async fn get<T: DeserializeOwned>(
     let url = build_url(config, table, params)?;
 
     let response_text = Request::get(&url)
-        .headers(build_headers(config, false, None)?)
+        .headers(build_headers(config, false, None, false)?)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch data: {}", e))?
@@ -136,7 +145,7 @@ pub async fn create<T: Serialize, R: DeserializeOwned>(
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
     Request::post(&url)
-        .headers(build_headers(config, true, None)?)
+        .headers(build_headers(config, true, None, false)?)
         .body(body)
         .map_err(|e| format!("Failed to build request: {}", e))?
         .send()
@@ -158,7 +167,7 @@ pub async fn update<T: Serialize, R: DeserializeOwned>(
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
     Request::patch(&url)
-        .headers(build_headers(config, true, None)?)
+        .headers(build_headers(config, true, None, false)?)
         .body(body)
         .map_err(|e| format!("Failed to build request: {}", e))?
         .send()
@@ -173,7 +182,7 @@ pub async fn delete(config: &ClientConfig, table: &str, id: i32) -> Result<(), S
     let url = build_url(config, table, &[("id", &id.to_string())])?;
 
     Request::delete(&url)
-        .headers(build_headers(config, false, None)?)
+        .headers(build_headers(config, false, None, false)?)
         .send()
         .await
         .map_err(|e| format!("Failed to delete data: {}", e))?;
@@ -204,7 +213,7 @@ pub async fn get_by_in<T: DeserializeOwned>(
     );
 
     let response_text = Request::get(&url)
-        .headers(build_headers(config, false, None)?)
+        .headers(build_headers(config, false, None, false)?)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch data: {}", e))?
@@ -216,4 +225,70 @@ pub async fn get_by_in<T: DeserializeOwned>(
 
     serde_json::from_str::<Vec<T>>(&response_text)
         .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+/// Get records with pagination support using offset and limit
+/// Example usage: get_paginated::<Content>(config, "content", &[("status", "published")], 0, 10).await?
+pub async fn get_paginated<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    filters: &[(&str, &str)],
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<T>, String> {
+    let mut params: Vec<(&str, String)> =
+        filters.iter().map(|(k, v)| (*k, v.to_string())).collect();
+
+    params.push(("offset", offset.to_string()));
+    params.push(("limit", limit.to_string()));
+
+    let params_ref: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    let url = build_url(config, table, &params_ref)?;
+
+    let response_text = Request::get(&url)
+        .headers(build_headers(config, false, None, false)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch paginated data: {}", e))?
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+    tracing::debug!("Raw response from {}: {}", url, response_text);
+
+    serde_json::from_str::<Vec<T>>(&response_text)
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+/// Count the total number of records in a table, optionally with filters
+/// Example usage: count(config, "content", &[("status", "published")]).await?
+pub async fn count(
+    config: &ClientConfig,
+    table: &str,
+    filters: &[(&str, &str)],
+) -> Result<u32, String> {
+    let params_ref: Vec<(&str, &str)> = filters.iter().map(|(k, v)| (*k, *v)).collect();
+
+    let url = build_url(config, table, &params_ref)?;
+
+    let response = Request::get(&url)
+        .headers(build_headers(config, false, None, true)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch count: {}", e))?;
+
+    let content_range = response
+        .headers()
+        .get("content-range")
+        .ok_or_else(|| "Content-Range header not found".to_string())?;
+
+    let count_str = content_range
+        .split('/')
+        .nth(1)
+        .ok_or_else(|| "Invalid Content-Range format".to_string())?;
+
+    count_str
+        .parse::<u32>()
+        .map_err(|e| format!("Failed to parse count: {}", e))
 }

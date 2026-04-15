@@ -1,4 +1,5 @@
 use crate::models::{Content, ContentRequest};
+use crate::pagination::{PaginatedResponse, PaginationParams};
 use crate::services::ContentService;
 use crate::utils::config::Config;
 use dioxus::prelude::*;
@@ -47,7 +48,33 @@ impl ContentContext {
 
     /// Fetches all content items
     pub async fn get_all_content(&self) -> Result<Vec<Content>, String> {
-        self.content_service.cloned().get_all_content().await
+        self.content_service
+            .cloned()
+            .get_paginated_content(
+                &[],
+                PaginationParams::default().page,
+                PaginationParams::default().page_size,
+            )
+            .await
+            .map(|r| r.data)
+    }
+
+    /// Fetches paginated content items
+    pub async fn get_paginated_content(
+        &self,
+        filters: &[(&str, &str)],
+        page: u32,
+        page_size: u32,
+    ) -> Result<PaginatedResponse<Content>, String> {
+        self.content_service
+            .cloned()
+            .get_paginated_content(filters, page, page_size)
+            .await
+    }
+
+    /// Counts total content items
+    pub async fn count_content(&self, filters: &[(&str, &str)]) -> Result<u32, String> {
+        self.content_service.cloned().count_content(filters).await
     }
 
     /// Fetches a single content item by ID
