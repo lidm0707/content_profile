@@ -22,7 +22,7 @@ anyhow = "1.0"
 tracing = "0.1"
 
 # HTTP client for web
-gloo-net = { version = "0.7", features = ["http"] }
+gloo-net = { version = "0.6", features = ["http"] }
 web-sys = { version = "0.3", features = ["Window", "Storage"] }
 
 # Markdown processing
