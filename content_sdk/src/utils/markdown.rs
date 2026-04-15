@@ -236,7 +236,7 @@ Hello world"#;
         // Single newline should create line break (<br>)
         assert!(html.contains("<p>"));
         assert!(html.contains("Hello"));
-        assert!(html.contains("<br>"));
+        assert!(html.contains("<br />"));
         assert!(html.contains("World"));
     }
 
@@ -254,7 +254,6 @@ Hello world"#;
     fn test_render_markdown_to_html_with_bold() {
         let markdown = "**Bold** text";
         let html = render_markdown_to_html(markdown);
-        println!("Bold HTML output: {}", html);
         assert!(html.contains("<strong>Bold</strong>"));
     }
 
