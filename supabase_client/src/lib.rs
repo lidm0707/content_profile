@@ -6,5 +6,5 @@ pub mod client;
 pub mod config;
 
 pub use client::*;
-pub use client::{count, get_by_in, get_paginated};
+pub use client::{count, get_by_in, get_paginated, get_paginated_with_count};
 pub use config::{ClientConfig, client_config};

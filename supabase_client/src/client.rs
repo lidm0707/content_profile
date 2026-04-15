@@ -261,6 +261,61 @@ pub async fn get_paginated<T: DeserializeOwned>(
         .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
+/// Get records with pagination support and total count in a single request
+/// Uses Supabase's `Prefer: count=exact` header to get both data and count
+/// Returns a tuple of (data, total_count)
+/// Example usage: get_paginated_with_count::<Content>(config, "content", &[("status", "published")], 0, 10).await?
+pub async fn get_paginated_with_count<T: DeserializeOwned>(
+    config: &ClientConfig,
+    table: &str,
+    filters: &[(&str, &str)],
+    offset: u32,
+    limit: u32,
+) -> Result<(Vec<T>, u32), String> {
+    let mut params: Vec<(&str, String)> =
+        filters.iter().map(|(k, v)| (*k, v.to_string())).collect();
+
+    params.push(("offset", offset.to_string()));
+    params.push(("limit", limit.to_string()));
+
+    let params_ref: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    let url = build_url(config, table, &params_ref)?;
+
+    let response = Request::get(&url)
+        .headers(build_headers(config, false, None, true)?)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch paginated data: {}", e))?;
+
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+    tracing::debug!("Raw response from {}: {}", url, response_text);
+
+    let data = serde_json::from_str::<Vec<T>>(&response_text)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let content_range = response
+        .headers()
+        .get("content-range")
+        .ok_or_else(|| "Content-Range header not found".to_string())?;
+
+    let count_str = content_range
+        .split('/')
+        .nth(1)
+        .ok_or_else(|| "Invalid Content-Range format".to_string())?;
+
+    let total_count: u32 = count_str
+        .trim()
+        .parse()
+        .map_err(|e| format!("Failed to parse count: {}", e))?;
+
+    Ok((data, total_count))
+}
+
 /// Count the total number of records in a table, optionally with filters
 /// Example usage: count(config, "content", &[("status", "published")]).await?
 pub async fn count(

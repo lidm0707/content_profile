@@ -200,11 +200,10 @@ impl ContentService {
             }
             AppMode::Supabase => {
                 trace!("Using SupabaseService for get_paginated_content");
-                let data = self
+                let (data, total_items) = self
                     .remote_service
-                    .get_paginated_content(filters, offset, page_size)
+                    .get_paginated_content_with_count(filters, offset, page_size)
                     .await?;
-                let total_items = self.remote_service.count_content(filters).await?;
 
                 Ok(crate::pagination::PaginatedResponse::new(
                     data,

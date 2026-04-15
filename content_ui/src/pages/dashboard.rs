@@ -196,12 +196,6 @@ pub fn Dashboard() -> Element {
         }
     });
 
-    let count_context = content_context.clone();
-    let mut total_count = use_resource(move || {
-        let content_context = count_context.clone();
-        async move { content_context.count_content(&[]).await }
-    });
-
     let mut error_message = use_signal(|| None::<String>);
     let mut contents_data = use_signal(Vec::<Content>::new);
     let tag_context: TagContext = use_context();
@@ -231,7 +225,6 @@ pub fn Dashboard() -> Element {
     let handle_refresh = move |_| {
         contents.restart();
         tags.restart();
-        total_count.restart();
     };
 
     let handle_previous_page = move |_| {
@@ -242,11 +235,11 @@ pub fn Dashboard() -> Element {
 
     let handle_next_page = move |_| {
         let current = current_page();
-        let total = total_count
+        let total = contents
             .read()
             .as_ref()
             .and_then(|r| r.as_ref().ok())
-            .copied()
+            .map(|r| r.total_items)
             .unwrap_or(0);
         let max_page = if total > 0 {
             (total + page_size - 1) / page_size
@@ -280,7 +273,7 @@ pub fn Dashboard() -> Element {
 
                 StatCard {
                     label: "Total Content".to_string(),
-                    value: total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0).to_string(),
+                    value: contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items).unwrap_or(0).to_string(),
                     value_color: "text-gray-900".to_string(),
                 }
 
@@ -400,7 +393,7 @@ pub fn Dashboard() -> Element {
 
                     // Pagination controls
                     {
-                        let total = total_count.read().as_ref().and_then(|r| r.as_ref().ok()).copied().unwrap_or(0);
+                        let total = contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items).unwrap_or(0);
                         let current = current_page();
                         let max_page = if total > 0 {
                             (total + page_size - 1) / page_size

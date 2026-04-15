@@ -3,7 +3,7 @@ use crate::utils::config::Config;
 use gloo_net::http::Request;
 use supabase_client::{
     ClientConfig, build_headers, count, create, delete, get, get_by, get_by_id, get_by_in,
-    get_paginated, update,
+    get_paginated, get_paginated_with_count, update,
 };
 
 #[derive(Clone)]
@@ -133,6 +133,17 @@ impl SupabaseService {
     ) -> Result<Vec<Content>, String> {
         let config = self.config.as_ref().ok_or("Supabase not configured")?;
         get_paginated::<Content>(config, "content", filters, offset, limit).await
+    }
+
+    /// Fetches paginated content with total count in a single API call
+    pub async fn get_paginated_content_with_count(
+        &self,
+        filters: &[(&str, &str)],
+        offset: u32,
+        limit: u32,
+    ) -> Result<(Vec<Content>, u32), String> {
+        let config = self.config.as_ref().ok_or("Supabase not configured")?;
+        get_paginated_with_count::<Content>(config, "content", filters, offset, limit).await
     }
 
     pub async fn count_content(&self, filters: &[(&str, &str)]) -> Result<u32, String> {

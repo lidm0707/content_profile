@@ -432,7 +432,7 @@ impl Default for PaginationParams {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
-    pub total: u32,
+    pub total_items: u32,
     pub page: u32,
     pub page_size: u32,
     pub total_pages: u32,
@@ -1037,7 +1037,11 @@ match content.read() {
 | Type | Description |
 |------|-------------|
 | `PaginationParams` | Request parameters for pagination (page, page_size) |
-| `PaginatedResponse<T>` | Response with paginated data and metadata |
+| `PaginatedResponse<T>` | Response with paginated data and metadata (contains `data`, `total_items`, `page`, `page_size`, `total_pages`) |
+
+### Performance Note
+
+The SDK optimizes API calls by using Supabase's `Prefer: count=exact` header, which allows fetching both paginated data and the total count in a **single API request**. This eliminates the need for a separate `count_content()` call when using `get_paginated_content()`.
 
 ### ContentContext Methods
 
