@@ -1,30 +1,29 @@
 [package]
 name = "content_sdk"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
 # Dioxus framework
-dioxus = { version = "0.7.1", features = ["router", "web"] }
+dioxus = { version = "0.7", features = ["router", "web"] }
 dioxus-logger = "0.5"
 
 # Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Date/time handling
-chrono = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Error handling
-anyhow = { workspace = true }
+anyhow = "1.0"
 
 # Logging
-tracing = { workspace = true }
+tracing = "0.1"
 
 # HTTP client for web
-gloo-net = { workspace = true }
-web-sys = { workspace = true }
+gloo-net = { version = "0.7", features = ["http"] }
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
 
 # Markdown processing
 pulldown-cmark = "0.13.3"
