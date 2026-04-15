@@ -190,7 +190,11 @@ fn TagsField(
                 } else {
                     for (tag_id, tag) in tag_badges.read().iter().cloned() {
                         div {
-                            class: "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group",
+                            class: if tag_to_remove().map(|(id, _)| id == tag_id).unwrap_or(false) {
+                                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors duration-150 group"
+                            } else {
+                                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group"
+                            },
 
                             span {
                                 class: "mr-1",
