@@ -10,7 +10,7 @@ mod routes;
 fn init_tracing() {
     use log::Level;
     console_log::init_with_level(Level::Debug).expect("Failed to initialize logger");
-    tracing_wasm::set_as_global_default();
+    // tracing_wasm::set_as_global_default();
 }
 
 // Main entry point

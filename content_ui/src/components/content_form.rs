@@ -156,6 +156,56 @@ fn PreviewModeBodyEditor(body: Signal<String>) -> Element {
 }
 
 /// Tags field component for managing content tags
+/// Individual tag badge component
+#[component]
+fn TagBadge(tag_id: i32, tag: Tag, tag_to_remove: Signal<Option<(i32, String)>>) -> Element {
+    let is_marked_for_removal = tag_to_remove().map(|(id, _)| id == tag_id).unwrap_or(false);
+    debug!(
+        "TagBadge render: id={}, name={}, is_marked_for_removal={}",
+        tag_id, tag.name, is_marked_for_removal
+    );
+
+    rsx! {
+        div {
+            class: if is_marked_for_removal {
+                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors duration-150 group"
+            } else {
+                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group"
+            },
+
+            span {
+                class: "mr-1",
+                "{tag.name}"
+            }
+            button {
+                r#type: "button",
+                class: "ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150",
+                onclick: move |_| {
+                    debug!("Tag remove clicked: id={}, name={}", tag_id, tag.name);
+                    tag_to_remove.set(Some((tag_id, tag.name.clone())));
+                },
+                disabled: false,
+                title: "Remove tag",
+
+                svg {
+                    class: "w-3 h-3",
+                    fill: "none",
+                    view_box: "0 0 24 24",
+                    stroke: "currentColor",
+
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        "stroke-width": 2,
+                        d: "M6 18L18 6M6 6l12 12"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Tags field component for managing content tags
 #[component]
 fn TagsField(
     selected_tag_ids: Signal<Vec<i32>>,
@@ -189,41 +239,10 @@ fn TagsField(
                     }
                 } else {
                     for (tag_id, tag) in tag_badges.read().iter().cloned() {
-                        div {
-                            class: if tag_to_remove().map(|(id, _)| id == tag_id).unwrap_or(false) {
-                                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors duration-150 group"
-                            } else {
-                                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group"
-                            },
-
-                            span {
-                                class: "mr-1",
-                                "{tag.name}"
-                            }
-                            button {
-                                r#type: "button",
-                                class: "ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150",
-                                onclick: move |_| {
-                                    tag_to_remove.set(Some((tag_id, tag.name.clone())));
-                                },
-                                disabled: false,
-                                //*is_submitting.read()
-                                title: "Remove tag",
-
-                                svg {
-                                    class: "w-3 h-3",
-                                    fill: "none",
-                                    view_box: "0 0 24 24",
-                                    stroke: "currentColor",
-
-                                    path {
-                                        stroke_linecap: "round",
-                                        stroke_linejoin: "round",
-                                        "stroke-width": 2,
-                                        d: "M6 18L18 6M6 6l12 12"
-                                    }
-                                }
-                            }
+                        TagBadge {
+                            tag_id,
+                            tag,
+                            tag_to_remove,
                         }
                     }
 
@@ -572,8 +591,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut isSubmitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
-    let mut tag_to_remove = use_signal(|| None::<(i32, String)>);
-    let mut show_clear_all_confirmation = use_signal(|| false);
+    let tag_to_remove = use_signal(|| None::<(i32, String)>);
+    let show_clear_all_confirmation = use_signal(|| false);
 
     // Fetch available_tags using resource
     let available_tags_resource = use_resource(move || {
