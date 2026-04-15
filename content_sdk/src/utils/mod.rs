@@ -1,15 +1,7 @@
 pub mod config;
 pub mod markdown;
 
-use pulldown_cmark::{Parser, html};
-
-/// Renders Markdown to HTML using pulldown-cmark
-pub fn render_markdown_to_html(markdown: &str) -> String {
-    let parser = Parser::new(markdown);
-    let mut html_output = String::new();
-    html::push_html(&mut html_output, parser);
-    html_output
-}
+pub use markdown::render_markdown_to_html;
 
 /// Wraps text with markdown syntax
 pub fn wrap_with_markdown(text: &str, before: &str, after: &str) -> String {

@@ -1,8 +1,29 @@
 use crate::models::Tag;
+use pulldown_cmark::{Parser, html};
 
 const FRONTMATTER_START: &str = "---";
 const FRONTMATTER_END: &str = "---";
 const TAGS_KEY: &str = "tags";
+
+/// Converts markdown text to HTML, properly handling newlines
+///
+/// # Arguments
+/// * `markdown` - The markdown text to convert
+///
+/// # Returns
+/// * HTML string with proper newline handling
+///
+/// # Examples
+/// ```ignore
+/// let html = render_markdown_to_html("Hello\n\nWorld");
+/// // Returns: "<p>Hello</p>\n<p>World</p>"
+/// ```
+pub fn render_markdown_to_html(markdown: &str) -> String {
+    let parser = Parser::new(markdown);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+    html_output
+}
 
 pub fn add_tag_frontmarkter(content: &str, tags: &[Tag]) -> String {
     if tags.is_empty() {
@@ -79,10 +100,9 @@ pub fn parse_tag_frontmatter(content: &str) -> Vec<String> {
             continue;
         }
 
-        if in_tags_section
-            && let Some(tag_name) = parse_tag_line(line) {
-                tags.push(tag_name);
-            }
+        if in_tags_section && let Some(tag_name) = parse_tag_line(line) {
+            tags.push(tag_name);
+        }
     }
 
     tags
@@ -199,5 +219,39 @@ Hello world"#;
 
         assert!(result.contains("- new-tag"));
         assert!(!result.contains("- old-tag"));
+    }
+
+    #[test]
+    fn test_render_markdown_to_html_single_newline() {
+        let markdown = "Hello\nWorld";
+        let html = render_markdown_to_html(markdown);
+        // Single newline within text should be preserved in paragraph
+        assert!(html.contains("<p>"));
+        assert!(html.contains("Hello"));
+        assert!(html.contains("World"));
+    }
+
+    #[test]
+    fn test_render_markdown_to_html_double_newline() {
+        let markdown = "Hello\n\nWorld";
+        let html = render_markdown_to_html(markdown);
+        // Double newline should create separate paragraphs
+        assert!(html.contains("<p>Hello</p>"));
+        assert!(html.contains("<p>World</p>"));
+    }
+
+    #[test]
+    fn test_render_markdown_to_html_with_bold() {
+        let markdown = "**Bold** text";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<strong>Bold</strong>"));
+    }
+
+    #[test]
+    fn test_render_markdown_to_html_with_link() {
+        let markdown = "[Link](https://example.com)";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("href=\"https://example.com\""));
+        assert!(html.contains("Link"));
     }
 }
