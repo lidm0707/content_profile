@@ -32,7 +32,7 @@ tracing-wasm = "0.2"
 getrandom = { version = "0.2", features = ["js"], optional = true }
 url = "2.5"
 pulldown-cmark = "0.13.3"
-gloo-net = { version = "0.7", features = ["http"] }
+gloo-net = { version = "0.6", features = ["http"] }
 gloo-timers = "0.3"
 
 
