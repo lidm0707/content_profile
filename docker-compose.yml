@@ -1,0 +1,30 @@
+services:
+  content_proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    ports:
+      - "6190:6190"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+    depends_on:
+      - content_ui
+    networks:
+      - content_net
+
+  content_ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+      args:
+        APP_MODE: production
+        SUPABASE_URL: ${SUPABASE_URL}
+        SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    expose:
+      - "80"
+    networks:
+      - content_net
+
+networks:
+  content_net:
+    driver: bridge

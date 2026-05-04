@@ -1,0 +1,21 @@
+# Block all target except build outputs
+target/**
+!target/dx/
+!target/dx/content_ui/
+!target/dx/content_ui/release/
+!target/dx/content_ui/release/web/
+!target/dx/content_ui/release/web/public/
+!target/dx/content_ui/release/web/public/**
+!target/release/
+!target/release/content_proxy
+
+node_modules/
+.git/
+.env
+.plans/
+.skill/
+.supabase/
+examples/
+bench/
+*.md
+LICENSE

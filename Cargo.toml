@@ -3,6 +3,7 @@ members = [
     "content_ui",
     "supabase_client",
     "content_sdk",
+    "content_proxy",
 ]
 resolver = "2"
 

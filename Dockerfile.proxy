@@ -1,0 +1,10 @@
+FROM debian:bookworm-slim AS runtime
+
+COPY target/release/content_proxy /usr/local/bin/content_proxy
+COPY content_proxy/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+EXPOSE 6190
+
+CMD ["content_proxy"]
