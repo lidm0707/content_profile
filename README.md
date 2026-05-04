@@ -91,8 +91,17 @@ content_profile/
 │  ├─ Cargo.toml              # UI dependencies
 │  ├─ build.rs                # Build script for environment variables
 │  └─ Dioxus.toml            # Dioxus configuration
+├─ content_proxy/              # Pingora reverse proxy
+│  ├─ src/
+│  │  └─ main.rs             # Proxy server (routes to Supabase Cloud + UI)
+│  └─ Cargo.toml              # Proxy dependencies
 ├─ supabase_client/            # Supabase client library
 │  └─ Cargo.toml              # Supabase dependencies
+├─ build.sh                    # Host build + Docker compose script
+├─ docker-compose.yml          # Docker Compose orchestration
+├─ Dockerfile.ui               # nginx + WASM static files
+├─ Dockerfile.proxy            # Pingora proxy image
+├─ .dockerignore               # Docker build exclusions
 ├─ .env.example                # Environment variables template
 ├─ supabase_schema.sql         # Database schema for Supabase
 └─ README.md                  # This file
@@ -191,6 +200,50 @@ The schema includes RLS policies to protect your data. Ensure they're enabled:
 ALTER TABLE content ENABLE ROW LEVEL SECURITY;
 ```
 
+## 🐳 Docker Compose (Quick Start)
+
+Run the entire stack with a single command. Uses **Pingora** as a reverse proxy to route API calls to Supabase Cloud and serve the WASM UI via nginx.
+
+### Prerequisites
+
+- Docker & Docker Compose
+- Rust + Dioxus CLI (for host build step)
+- Supabase Cloud project with `.env` configured
+
+### Build & Run
+
+```bash
+./build.sh
+docker compose up
+```
+
+Open **http://localhost:6190** in your browser.
+
+### Architecture
+
+```
+Browser → Pingora Proxy (:6190)
+              ├── /rest/*, /auth/*  → Supabase Cloud (HTTPS)
+              └── /*                → content_ui (nginx + WASM)
+```
+
+### What `build.sh` Does
+
+| Step | Command | Purpose |
+|------|---------|----------|
+| 1 | `npx @tailwindcss/cli` | Build tailwind CSS |
+| 2 | `dx build --release --web` | Build WASM app |
+| 3 | `cargo build --release -p content_proxy` | Build Pingora proxy |
+| 4 | `docker compose build` | Package artifacts into images |
+
+### Stop
+
+```bash
+docker compose down
+```
+
+---
+
 ## 🚀 Running the Application
 
 ### Development Mode
@@ -212,7 +265,7 @@ This will:
 To build for web deployment:
 
 ```bash
-cargo build --release --target wasm32-unknown-unknown
+dx build --release --web --package content_ui
 ```
 
 ### Desktop Application
