@@ -1,5 +1,5 @@
 use crate::models::Tag;
-use pulldown_cmark::{Parser, html};
+use pulldown_cmark::{Options, Parser, html};
 
 const FRONTMATTER_START: &str = "---";
 const FRONTMATTER_END: &str = "---";
@@ -22,11 +22,13 @@ const TAGS_KEY: &str = "tags";
 /// // Returns: "<p>Hello<br>World</p>"
 /// ```
 pub fn render_markdown_to_html(markdown: &str) -> String {
-    // Pre-process markdown to convert newlines to line breaks
-    // Two spaces at end of line + newline = <br> in markdown
-    let processed_markdown = markdown.replace("\n", "  \n");
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TASKLISTS);
 
-    let parser = Parser::new(&processed_markdown);
+    let processed_markdown = markdown.replace("\n", "  \n");
+    let parser = Parser::new_ext(&processed_markdown, options);
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
     html_output

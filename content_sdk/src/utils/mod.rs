@@ -62,6 +62,24 @@ pub fn format_blockquote(text: &str) -> String {
         .join("\n")
 }
 
+/// Formats a markdown table with headers and rows
+pub fn format_table(headers: &[&str], rows: &[&[&str]]) -> String {
+    let header_line = format!("| {} |", headers.join(" | "));
+    let separator = format!(
+        "| {} |",
+        headers
+            .iter()
+            .map(|_| "---")
+            .collect::<Vec<_>>()
+            .join(" | ")
+    );
+    let mut lines = vec![header_line, separator];
+    for row in rows {
+        lines.push(format!("| {} |", row.join(" | ")));
+    }
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,7 +4,7 @@ use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHE
 use content_sdk::utils::markdown::update_tags_in_frontmatter;
 use content_sdk::utils::{
     format_blockquote, format_bold, format_code, format_code_block, format_heading, format_image,
-    format_italic, format_link, format_ordered_list, format_unordered_list,
+    format_italic, format_link, format_ordered_list, format_table, format_unordered_list,
     render_markdown_to_html,
 };
 use dioxus::prelude::*;
@@ -44,6 +44,7 @@ fn EditModeBodyEditor(
     handle_format_unordered_list: EventHandler<MouseEvent>,
     handle_format_ordered_list: EventHandler<MouseEvent>,
     handle_format_blockquote: EventHandler<MouseEvent>,
+    handle_format_table: EventHandler<MouseEvent>,
 ) -> Element {
     rsx! {
         div {
@@ -128,6 +129,14 @@ fn EditModeBodyEditor(
                 title: "Blockquote",
                 "Quote"
             }
+            button {
+                r#type: "button",
+                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
+                onclick: handle_format_table,
+                disabled: *is_submitting.read(),
+                title: "Table",
+                "Table"
+            }
         }
         textarea {
             value: "{body}",
@@ -155,9 +164,9 @@ fn PreviewModeBodyEditor(body: Signal<String>) -> Element {
 
             } else {
                 div {
-                    class: "prose prose-sm max-w-none",
-                    dangerous_inner_html: render_markdown_to_html(&body.read()),
-                }
+                        class: "prose prose-sm max-w-none whitespace-pre-wrap",
+                        dangerous_inner_html: render_markdown_to_html(&body.read()),
+                    }
             }
         }
     }
@@ -811,6 +820,18 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         *body.write() = append_markdown(&current_body, &markdown);
     };
 
+    let handle_format_table = move |_| {
+        let current_body = body.read().clone();
+        let markdown = format_table(
+            &["Header 1", "Header 2", "Header 3"],
+            &[
+                &["Cell 1", "Cell 2", "Cell 3"],
+                &["Cell 4", "Cell 5", "Cell 6"],
+            ],
+        );
+        *body.write() = append_markdown(&current_body, &markdown);
+    };
+
     let handle_submit = move |_| {
         if title.read().is_empty() {
             error_message.set(Some("Title is required".to_string()));
@@ -1020,6 +1041,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     handle_format_unordered_list: handle_format_unordered_list,
                                     handle_format_ordered_list: handle_format_ordered_list,
                                     handle_format_blockquote: handle_format_blockquote,
+                                    handle_format_table: handle_format_table,
                                 }
                             } else {
                                 PreviewModeBodyEditor {
