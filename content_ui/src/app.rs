@@ -59,11 +59,11 @@ pub fn App() -> Element {
 
     // Create ContentContext with initial config
     let content_context = ContentContext::new(Some(config_signal().clone()));
-    let mut content_context = use_signal(|| content_context);
+    let content_context = use_signal(|| content_context);
 
     // Watch for JWT token changes and update ContentContext
     {
-        let mut content_context = content_context.clone();
+        let mut content_context = content_context;
         use_effect(move || {
             let token = jwt_token.read().clone();
             content_context.write().update_jwt_token(token);
@@ -74,11 +74,11 @@ pub fn App() -> Element {
 
     // Create TagContext with initial config
     let tag_context = TagContext::new(Some(config_signal().clone()));
-    let mut tag_context = use_signal(|| tag_context);
+    let tag_context = use_signal(|| tag_context);
 
     // Watch for JWT token changes and update TagContext
     {
-        let mut tag_context = tag_context.clone();
+        let mut tag_context = tag_context;
         use_effect(move || {
             let token = jwt_token.read().clone();
             tag_context.write().update_jwt_token(token);
@@ -89,11 +89,11 @@ pub fn App() -> Element {
 
     // Create ContentTagsContext with initial config
     let content_tags_context = ContentTagsContext::new(Some(config_signal().clone()));
-    let mut content_tags_context = use_signal(|| content_tags_context);
+    let content_tags_context = use_signal(|| content_tags_context);
 
     // Watch for JWT token changes and update ContentTagsContext
     {
-        let mut content_tags_context = content_tags_context.clone();
+        let mut content_tags_context = content_tags_context;
         use_effect(move || {
             let token = jwt_token.read().clone();
             content_tags_context.write().update_jwt_token(token);

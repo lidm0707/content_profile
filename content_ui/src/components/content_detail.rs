@@ -312,7 +312,7 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
                                                 let mut content_context = content_context.clone();
                                                 let navigator = navigator;
                                                 spawn(async move {
-                                                    if let Ok(_) = content_context.delete_content(id).await {
+                                                    if content_context.delete_content(id).await.is_ok() {
                                                         navigator.push(Route::Dashboard {});
                                                     }
                                                 });

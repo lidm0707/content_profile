@@ -242,7 +242,7 @@ pub fn Dashboard() -> Element {
             .map(|r| r.total_items)
             .unwrap_or(0);
         let max_page = if total > 0 {
-            (total + page_size - 1) / page_size
+            total.div_ceil(page_size)
         } else {
             1
         };
@@ -396,7 +396,7 @@ pub fn Dashboard() -> Element {
                         let total = contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items).unwrap_or(0);
                         let current = current_page();
                         let max_page = if total > 0 {
-                            (total + page_size - 1) / page_size
+                            total.div_ceil(page_size)
                         } else {
                             1
                         };

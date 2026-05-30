@@ -152,25 +152,19 @@ impl UseTags {
                 let mut filtered = tags;
 
                 // Filter by IDs
-                if let Some(filter_ids) = self.filter_ids.read().as_ref() {
-                    if !filter_ids.is_empty() {
-                        filtered = filtered
-                            .into_iter()
-                            .filter(|t| t.id.map_or(false, |id| filter_ids.contains(&id)))
-                            .collect();
-                    }
+                if let Some(filter_ids) = self.filter_ids.read().as_ref()
+                    && !filter_ids.is_empty()
+                {
+                    filtered.retain(|t| t.id.is_some_and(|id| filter_ids.contains(&id)));
                 }
 
                 // Filter by search query
                 if let Some(query) = self.search_query.read().as_ref() {
                     let query_lower = query.to_lowercase();
-                    filtered = filtered
-                        .into_iter()
-                        .filter(|t| {
-                            t.name.to_lowercase().contains(&query_lower)
-                                || t.slug.to_lowercase().contains(&query_lower)
-                        })
-                        .collect();
+                    filtered.retain(|t| {
+                        t.name.to_lowercase().contains(&query_lower)
+                            || t.slug.to_lowercase().contains(&query_lower)
+                    });
                 }
 
                 Some(Ok(filtered))

@@ -484,7 +484,7 @@ pub fn TagsList() -> Element {
     let mut is_deleting = use_signal(|| false);
     let mut success_message = use_signal(|| None::<String>);
     let mut error_message = use_signal(|| None::<String>);
-    let mut search_query = use_signal(|| String::new());
+    let mut search_query = use_signal(String::new);
 
     // Update tags when resource loads
     use_effect(move || {

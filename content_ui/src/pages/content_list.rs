@@ -14,7 +14,6 @@ pub struct ContentListProps {
 /// Content list page - displays content filtered by tag
 #[component]
 pub fn ContentList(props: ContentListProps) -> Element {
-    let navigator = use_navigator();
     let content_context: ContentContext = use_context();
     let tag_context: TagContext = use_context();
     let content_tags_context: ContentTagsContext = use_context();
@@ -62,7 +61,6 @@ pub fn ContentList(props: ContentListProps) -> Element {
 
 #[component]
 fn HeaderSection(tag_name: String, contents: Resource<Result<Vec<Content>, String>>) -> Element {
-    let navigator = use_navigator();
     rsx! {
         div {
             class: "md:flex md:items-center md:justify-between py-8",
@@ -111,7 +109,6 @@ fn render_title_section(tag_name: &str) -> Element {
 
 #[component]
 fn ActionButtons(tag_name: String, contents: Resource<Result<Vec<Content>, String>>) -> Element {
-    let navigator = use_navigator();
     rsx! {
         div {
             class: "mt-4 flex md:mt-0 md:ml-4 space-x-3",

@@ -77,12 +77,6 @@ pub struct UseContentTags {
     filter_ids: Signal<Option<Vec<i32>>>,
     /// Signal for search query
     search_query: Signal<Option<String>>,
-    /// Supabase client config
-    config: ClientConfig,
-    /// Content tags table name (junction table)
-    content_tags_table: String,
-    /// Tags table name
-    tags_table: String,
 }
 
 impl UseContentTags {
@@ -175,7 +169,7 @@ impl UseContentTags {
                 // Filter tags to only include those in tag_ids
                 let filtered_tags: Vec<Tag> = all_tags
                     .into_iter()
-                    .filter(|tag| tag.id.map_or(false, |id| tag_ids.contains(&id)))
+                    .filter(|tag| tag.id.is_some_and(|id| tag_ids.contains(&id)))
                     .collect();
 
                 info!(
@@ -193,9 +187,6 @@ impl UseContentTags {
             content_id: content_id_signal,
             filter_ids: use_signal(|| None),
             search_query: use_signal(|| None),
-            config,
-            content_tags_table,
-            tags_table,
         }
     }
 
@@ -261,25 +252,19 @@ impl UseContentTags {
                 let mut filtered = tags;
 
                 // Filter by IDs
-                if let Some(filter_ids) = self.filter_ids.read().as_ref() {
-                    if !filter_ids.is_empty() {
-                        filtered = filtered
-                            .into_iter()
-                            .filter(|t| t.id.map_or(false, |id| filter_ids.contains(&id)))
-                            .collect();
-                    }
+                if let Some(filter_ids) = self.filter_ids.read().as_ref()
+                    && !filter_ids.is_empty()
+                {
+                    filtered.retain(|t| t.id.is_some_and(|id| filter_ids.contains(&id)));
                 }
 
                 // Filter by search query
                 if let Some(query) = self.search_query.read().as_ref() {
                     let query_lower = query.to_lowercase();
-                    filtered = filtered
-                        .into_iter()
-                        .filter(|t| {
-                            t.name.to_lowercase().contains(&query_lower)
-                                || t.slug.to_lowercase().contains(&query_lower)
-                        })
-                        .collect();
+                    filtered.retain(|t| {
+                        t.name.to_lowercase().contains(&query_lower)
+                            || t.slug.to_lowercase().contains(&query_lower)
+                    });
                 }
 
                 Some(Ok(filtered))

@@ -426,16 +426,16 @@ fn RemoveTagConfirmationModal(
                             is_removing.set(true);
                             let mut context_for_spawn = content_tags_context.clone();
                             let tag_id_for_spawn = tag_id;
-                            let mut tag_to_remove_for_spawn = tag_to_remove.clone();
-                            let mut is_removing_for_spawn = is_removing.clone();
+                            let mut tag_to_remove_for_spawn = tag_to_remove;
+                            let mut is_removing_for_spawn = is_removing;
 
                             spawn(async move {
-                                if let Some(content_id) = content_id {
-                                    if let Err(err) = context_for_spawn.remove_tag_from_content(content_id, tag_id_for_spawn).await {
-                                        error!("Failed to remove tag from content: {}", err);
-                                        is_removing_for_spawn.set(false);
-                                        return;
-                                    }
+                                if let Some(content_id) = content_id
+                                    && let Err(err) = context_for_spawn.remove_tag_from_content(content_id, tag_id_for_spawn).await
+                                {
+                                    error!("Failed to remove tag from content: {}", err);
+                                    is_removing_for_spawn.set(false);
+                                    return;
                                 }
 
                                 tag_to_remove_for_spawn.set(None);
@@ -475,7 +475,7 @@ fn ClearAllTagsConfirmationModal(
     show_clear_all_confirmation: Signal<bool>,
     selected_tag_ids: Signal<Vec<i32>>,
     tag_badges: ReadSignal<Vec<(i32, Tag)>>,
-    isSubmitting: ReadSignal<bool>,
+    is_submitting: ReadSignal<bool>,
 ) -> Element {
     rsx! {
         div {
@@ -492,7 +492,7 @@ fn ClearAllTagsConfirmationModal(
 
                 span {
                     class: "hidden sm:inline-block sm:align-middle sm:h-screen",
-                    "​"
+                    " "
                 }
 
                 div {
@@ -552,7 +552,7 @@ fn ClearAllTagsConfirmationModal(
                                 selected_tag_ids.set(Vec::new());
                                 show_clear_all_confirmation.set(false);
                             },
-                            disabled: *isSubmitting.read(),
+                            disabled: *is_submitting.read(),
 
                             "Clear All"
                         }
@@ -617,7 +617,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         debug!("Status signal initialized with value: {}", status_value);
         status_value
     });
-    let mut isSubmitting = use_signal(|| false);
+    let mut is_submitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
     let tag_to_remove = use_signal(|| None::<(i32, String)>);
@@ -822,7 +822,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             return;
         }
 
-        isSubmitting.set(true);
+        is_submitting.set(true);
 
         let selected_tags: Vec<Tag> = available_tags
             .read()
@@ -856,10 +856,10 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             request.status, selected_tag_ids_clone
         );
         props.on_submit.call((request, selected_tag_ids_clone));
-        isSubmitting.set(false);
+        is_submitting.set(false);
     };
 
-    let mut show_tag_selector = use_signal(|| false);
+    let show_tag_selector = use_signal(|| false);
 
     let available_tags_to_show = use_memo(move || {
         let selected = selected_tag_ids.read();
@@ -915,7 +915,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 value: "{title}",
                                 class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
                                 oninput: handle_title_change,
-                                disabled: *isSubmitting.read()
+                                disabled: *is_submitting.read()
                             }
                         }
 
@@ -932,7 +932,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 oninput: move |e: Event<FormData>| {
                                     *slug.write() = e.value();
                                 },
-                                disabled: *isSubmitting.read()
+                                disabled: *is_submitting.read()
                             }
                             p {
                                 class: "mt-1 text-xs text-gray-500",
@@ -952,7 +952,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 onchange: move |e: Event<FormData>| {
                                     *status.write() = e.value();
                                 },
-                                disabled: *isSubmitting.read(),
+                                disabled: *is_submitting.read(),
 
                                 option {
                                     value: STATUS_DRAFT,
@@ -986,7 +986,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     onclick: move |_| {
                                         isPreviewMode.set(false);
                                     },
-                                    disabled: *isSubmitting.read(),
+                                    disabled: *is_submitting.read(),
                                     "Edit"
                                 }
 
@@ -1000,7 +1000,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     onclick: move |_| {
                                         isPreviewMode.set(true);
                                     },
-                                    disabled: *isSubmitting.read(),
+                                    disabled: *is_submitting.read(),
                                     "Preview"
                                 }
                             }
@@ -1008,8 +1008,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                             // Formatting toolbar (only shown in edit mode)
                             if !*isPreviewMode.read() {
                                 EditModeBodyEditor {
-                                    body: body.clone(),
-                                    is_submitting: isSubmitting.clone(),
+                                    body,
+                                    is_submitting,
                                     handle_format_bold: handle_format_bold,
                                     handle_format_italic: handle_format_italic,
                                     handle_format_heading: handle_format_heading,
@@ -1023,14 +1023,14 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 }
                             } else {
                                 PreviewModeBodyEditor {
-                                    body: body.clone(),
+                                    body,
                                 }
                             }
                             }
 
                         TagsField {
                             selected_tag_ids,
-                            is_submitting: isSubmitting,
+                            is_submitting: is_submitting,
                             tag_to_remove,
                             show_clear_all_confirmation,
                             tags_loading,
@@ -1051,9 +1051,9 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     r#type: "button",
                     class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm",
                     onclick: handle_submit,
-                    disabled: *isSubmitting.read(),
+                    disabled: *is_submitting.read(),
 
-                    if *isSubmitting.read() {
+                    if *is_submitting.read() {
                         "Saving..."
                     } else {
                         "{button_text}"
@@ -1066,7 +1066,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     onclick: move |_| {
                         props.on_cancel.call(());
                     },
-                    disabled: *isSubmitting.read(),
+                    disabled: *is_submitting.read(),
                     "Cancel"
                 }
             }
@@ -1081,7 +1081,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 tag_name,
                 tag_to_remove,
                 selected_tag_ids,
-                is_submitting: isSubmitting,
+                is_submitting: is_submitting,
                 content_id: props.content.read().as_ref().and_then(|c| c.id),
                 content_tags_context: content_tags_context.clone(),
             }
@@ -1092,7 +1092,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 show_clear_all_confirmation,
                 selected_tag_ids,
                 tag_badges,
-                isSubmitting: isSubmitting,
+                is_submitting: is_submitting,
             }
         }
     }

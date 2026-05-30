@@ -2,7 +2,7 @@ use crate::models::{Content, ContentRequest};
 use crate::utils::config::Config;
 use gloo_net::http::Request;
 use supabase_client::{
-    ClientConfig, build_headers, count, create, delete, get, get_by, get_by_id, get_by_in,
+    ClientConfig, build_headers, count, delete, get, get_by, get_by_id, get_by_in,
     get_paginated, get_paginated_with_count, update,
 };
 

@@ -155,22 +155,16 @@ impl UseContent {
 
                 // Filter by status
                 if let Some(status) = self.filter_status.read().as_ref() {
-                    filtered = filtered
-                        .into_iter()
-                        .filter(|c| c.status == *status)
-                        .collect();
+                    filtered.retain(|c| c.status == *status);
                 }
 
                 // Filter by search query
                 if let Some(query) = self.search_query.read().as_ref() {
                     let query_lower = query.to_lowercase();
-                    filtered = filtered
-                        .into_iter()
-                        .filter(|c| {
-                            c.title.to_lowercase().contains(&query_lower)
-                                || c.body.to_lowercase().contains(&query_lower)
-                        })
-                        .collect();
+                    filtered.retain(|c| {
+                        c.title.to_lowercase().contains(&query_lower)
+                            || c.body.to_lowercase().contains(&query_lower)
+                    });
                 }
 
                 Some(Ok(filtered))

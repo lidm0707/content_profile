@@ -3,7 +3,7 @@ pub mod content_form;
 pub mod content_list;
 pub mod main_layout;
 pub mod navbar;
-pub mod notification_card;
+
 pub mod stat_card;
 
 pub use content_form::ContentForm;

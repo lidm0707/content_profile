@@ -75,7 +75,7 @@ impl Content {
     }
 }
 
-/// Custom serializer for id field - converts None to 0 for create operations
+// Custom serializer for id field - converts None to 0 for create operations
 // fn serialize_id<S>(id: &Option<i32>, serializer: S) -> Result<S::Ok, S::Error>
 // where
 //     S: serde::Serializer,

@@ -172,8 +172,6 @@ impl ContentService {
             AppMode::Office => {
                 trace!("Using LocalStorageService for get_paginated_content");
                 let all_content = self.local_service.get_all_content()?;
-                let total_items = all_content.len() as u32;
-
                 let mut filtered: Vec<Content> = all_content;
                 for (key, value) in filters {
                     filtered.retain(|c| match *key {

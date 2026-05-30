@@ -47,8 +47,8 @@ pub fn TagsEdit(id: i32) -> Element {
 
     // State management
     let mut current_tag = use_signal(|| None::<Tag>);
-    let mut form_name = use_signal(|| String::new());
-    let mut form_slug = use_signal(|| String::new());
+    let mut form_name = use_signal(String::new);
+    let mut form_slug = use_signal(String::new);
     let mut form_parent_id = use_signal(|| None::<i32>);
     let mut is_submitting = use_signal(|| false);
     let mut success_message = use_signal(|| None::<String>);
