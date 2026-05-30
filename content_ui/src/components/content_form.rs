@@ -10,6 +10,14 @@ use content_sdk::utils::{
 use dioxus::prelude::*;
 use tracing::debug;
 
+fn append_markdown(current_body: &str, markdown: &str) -> String {
+    if current_body.trim().is_empty() {
+        markdown.to_string()
+    } else {
+        format!("{}\n\n{}", current_body, markdown)
+    }
+}
+
 /// Props for content form component
 #[derive(Clone, PartialEq, Props)]
 pub struct ContentFormProps {
@@ -742,60 +750,65 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         }
     };
 
-    // Formatting handlers
+    // Formatting handlers - append templates to body
     let handle_format_bold = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_bold(&current_body);
+        let markdown = format_bold("bold text");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_italic = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_italic(&current_body);
+        let markdown = format_italic("italic text");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_code = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_code(&current_body);
+        let markdown = format_code("code");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_code_block = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_code_block(&current_body);
+        let markdown = format_code_block("code");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_heading = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_heading(&current_body, 2);
+        let markdown = format_heading("Heading", 2);
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_link = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_link(&current_body, "https://");
+        let markdown = format_link("Link text", "https://");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_unordered_list = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_unordered_list(&current_body);
+        let markdown = format_unordered_list("List item");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_ordered_list = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_ordered_list(&current_body, 1);
+        let markdown = format_ordered_list("List item", 1);
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_blockquote = move |_| {
         let current_body = body.read().clone();
-        *body.write() = format_blockquote(&current_body);
+        let markdown = format_blockquote("Quote text");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_format_image = move |_| {
         let current_body = body.read().clone();
-        let image_markdown = format_image("Alt text", "https://");
-        *body.write() = if current_body.trim().is_empty() {
-            image_markdown
-        } else {
-            format!("{}\n\n{}", current_body, image_markdown)
-        };
+        let markdown = format_image("Alt text", "https://");
+        *body.write() = append_markdown(&current_body, &markdown);
     };
 
     let handle_submit = move |_| {
