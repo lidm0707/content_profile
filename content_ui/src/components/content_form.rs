@@ -1048,7 +1048,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     body,
                                 }
                             }
-                            }
+                        }
 
                         TagsField {
                             selected_tag_ids,
