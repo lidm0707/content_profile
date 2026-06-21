@@ -43,6 +43,7 @@ pub fn App() -> Element {
         let supabase_url = env!("SUPABASE_URL");
         let supabase_anon_key = env!("SUPABASE_ANON_KEY");
         let google_oauth_client_id = env!("GOOGLE_OAUTH_CLIENT_ID");
+        let google_drive_folder_id = env!("GOOGLE_DRIVE_FOLDER_ID");
         let token = jwt_token.read().clone();
 
         tracing::debug!("Creating config - JWT token present: {}", token.is_some());
@@ -55,6 +56,11 @@ pub fn App() -> Element {
                 None
             } else {
                 Some(google_oauth_client_id.to_string())
+            },
+            if google_drive_folder_id.is_empty() {
+                None
+            } else {
+                Some(google_drive_folder_id.to_string())
             },
         )
     });

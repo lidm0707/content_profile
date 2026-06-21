@@ -7,6 +7,11 @@ members = [
 ]
 resolver = "2"
 
+# Strip debug info so the bundled wasm-opt doesn't crash on DWARF v5 sections
+# emitted by newer Rust toolchains (SIGABRT at DWARFEmitter.cpp:201).
+[profile.release]
+strip = "debuginfo"
+
 [workspace.package]
 version = "0.1.0"
 authors = ["lidm0707 <lightdemon17@gmail.com>"]

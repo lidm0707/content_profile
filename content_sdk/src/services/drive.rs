@@ -67,11 +67,13 @@ const HELPER_SCRIPT: &str = r#"
         });
     }
 
-    async function uploadAndShare(clientId, bytes, mime, name) {
+    async function uploadAndShare(clientId, bytes, mime, name, folderId) {
         const token = await getToken(clientId);
 
         const boundary = "gdrive_boundary_" + Math.random().toString(36).slice(2);
-        const metaJson = JSON.stringify({ name: name });
+        const meta = { name: name };
+        if (folderId) meta.parents = [folderId];
+        const metaJson = JSON.stringify(meta);
         const head =
             "--" + boundary + "\r\n" +
             "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
@@ -134,6 +136,7 @@ extern "C" {
         bytes: &js_sys::Uint8Array,
         mime: &str,
         name: &str,
+        folder_id: &str,
     ) -> js_sys::Promise;
 }
 
@@ -172,11 +175,13 @@ fn inject_helper_once() {
 ///
 /// Format: `https://drive.google.com/thumbnail?id={fileId}&sz=w1000`
 /// Requires `GOOGLE_OAUTH_CLIENT_ID` to be configured.
+/// Pass a folder ID as the last argument to upload into a specific Drive folder.
 pub async fn upload_image(
     client_id: &str,
     bytes: &[u8],
     mime: &str,
     name: &str,
+    folder_id: Option<&str>,
 ) -> Result<String, String> {
     if client_id.is_empty() {
         return Err("GOOGLE_OAUTH_CLIENT_ID not configured".to_string());
@@ -188,8 +193,9 @@ pub async fn upload_image(
     inject_helper_once();
 
     let js_bytes = js_sys::Uint8Array::from(bytes);
-    let promise =
-        GDRIVE_HELPER.with(|helper| helper.upload_and_share(client_id, &js_bytes, mime, name));
+    let folder_id_str = folder_id.unwrap_or("");
+    let promise = GDRIVE_HELPER
+        .with(|helper| helper.upload_and_share(client_id, &js_bytes, mime, name, folder_id_str));
 
     debug!(
         "awaiting Google Drive upload for {name} ({mime}, {} bytes)",

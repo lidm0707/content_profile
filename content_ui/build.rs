@@ -9,6 +9,7 @@ fn main() {
     let supabase_anon_key =
         std::env::var("SUPABASE_ANON_KEY").expect("not found ENV: SUPABASE_ANON_KEY");
     let google_oauth_client_id = std::env::var("GOOGLE_OAUTH_CLIENT_ID").unwrap_or_default();
+    let google_drive_folder_id = std::env::var("GOOGLE_DRIVE_FOLDER_ID").unwrap_or_default();
 
     // Print all relevant env vars (including defaults)
     println!("cargo:rustc-env=APP_MODE={}", app_mode);
@@ -17,6 +18,10 @@ fn main() {
     println!(
         "cargo:rustc-env=GOOGLE_OAUTH_CLIENT_ID={}",
         google_oauth_client_id
+    );
+    println!(
+        "cargo:rustc-env=GOOGLE_DRIVE_FOLDER_ID={}",
+        google_drive_folder_id
     );
 
     // Also print any other SUPABASE_ prefixed variables

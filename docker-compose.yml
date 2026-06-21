@@ -2,7 +2,7 @@ services:
   content_proxy:
     build:
       context: .
-      dockerfile: Dockerfile.proxy
+      dockerfile: proxy.Dockerfile
     ports:
       - "6190:6190"
     environment:
@@ -15,11 +15,13 @@ services:
   content_ui:
     build:
       context: .
-      dockerfile: Dockerfile.ui
+      dockerfile: ui.Dockerfile
       args:
         APP_MODE: production
         SUPABASE_URL: ${SUPABASE_URL}
         SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+        GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+        GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
     expose:
       - "80"
     networks:

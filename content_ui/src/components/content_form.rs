@@ -909,7 +909,15 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 })
                 .unwrap_or("image");
 
-            match drive_upload_image(&client_id, bytes.as_ref(), mime, &file_name).await {
+            match drive_upload_image(
+                &client_id,
+                bytes.as_ref(),
+                mime,
+                &file_name,
+                config.read().google_drive_folder_id.as_deref(),
+            )
+            .await
+            {
                 Ok(url) => {
                     let current_body = body_signal.read().clone();
                     let markdown = format_image(alt_text, &url);

@@ -295,8 +295,8 @@ Personal-tool client-side flow. Upload images directly from the editor to Google
 ## Architecture
 
 - `content_sdk::services::drive` (wasm32 only) injects a JS helper script into `<head>` that loads GIS, requests a `drive.file` token, uploads bytes via `multipart/related`, sets `anyone/reader`, and returns a `thumbnail` URL.
-- `content_ui` calls `upload_image(client_id, bytes, mime, name)` from the content form's image button.
-- Config: `GOOGLE_OAUTH_CLIENT_ID` env var wired through `build.rs` → `Config::google_oauth_client_id`.
+- `content_ui` calls `upload_image(client_id, bytes, mime, name, folder_id)` from the content form's image button. Pass `None` for `folder_id` to upload to Drive root, or a folder ID string to target a specific folder.
+- Config: `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_DRIVE_FOLDER_ID` env vars wired through `build.rs` → `Config::google_oauth_client_id`, `Config::google_drive_folder_id`.
 
 ## Setup
 

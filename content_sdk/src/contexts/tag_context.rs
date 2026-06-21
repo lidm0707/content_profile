@@ -25,7 +25,7 @@ impl TagContext {
         if let Some(ref mut cfg) = *config {
             cfg.jwt_token = jwt_token;
         } else {
-            *config = Some(Config::new("office", "", "", jwt_token, None));
+            *config = Some(Config::new("office", "", "", jwt_token, None, None));
         }
 
         // Recreate the service with updated config
