@@ -1,5 +1,7 @@
 pub mod auth;
 pub mod content;
+#[cfg(target_arch = "wasm32")]
+pub mod drive;
 pub mod local_storage;
 pub mod session;
 pub mod supabase;

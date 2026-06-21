@@ -23,7 +23,23 @@ tracing = "0.1"
 
 # HTTP client for web
 gloo-net = { version = "0.6", features = ["http"] }
-web-sys = { version = "0.3", features = ["Window", "Storage"] }
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Storage",
+    "Document",
+    "HtmlHeadElement",
+    "HtmlScriptElement",
+    "HtmlInputElement",
+    "File",
+    "FileList",
+    "Blob",
+    "Element",
+] }
+
+# WASM/JS interop for Google Identity Services
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
 
 # Markdown processing
 pulldown-cmark = "0.13.3"

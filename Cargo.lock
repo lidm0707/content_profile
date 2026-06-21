@@ -907,11 +907,14 @@ dependencies = [
  "dioxus",
  "dioxus-logger 0.5.1",
  "gloo-net",
+ "js-sys",
  "pulldown-cmark",
  "serde",
  "serde_json",
  "supabase_client",
  "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -929,6 +932,7 @@ dependencies = [
  "getrandom 0.2.17",
  "gloo-net",
  "gloo-timers",
+ "js-sys",
  "lazy_static",
  "log",
  "pulldown-cmark",
@@ -938,6 +942,8 @@ dependencies = [
  "tracing",
  "tracing-wasm",
  "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

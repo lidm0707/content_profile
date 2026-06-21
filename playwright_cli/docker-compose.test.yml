@@ -1,0 +1,16 @@
+services:
+  playwright:
+    build: .
+    container_name: content_profile_playwright
+    environment:
+      APP_URL: ${APP_URL:-http://content_proxy:6190}
+    networks:
+      - content_net
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+
+networks:
+  content_net:
+    external: true
+    name: content_profile_content_net

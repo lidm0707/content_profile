@@ -8,11 +8,16 @@ fn main() {
     let supabase_url = std::env::var("SUPABASE_URL").expect("not found ENV: SUPABASE_URL");
     let supabase_anon_key =
         std::env::var("SUPABASE_ANON_KEY").expect("not found ENV: SUPABASE_ANON_KEY");
+    let google_oauth_client_id = std::env::var("GOOGLE_OAUTH_CLIENT_ID").unwrap_or_default();
 
     // Print all relevant env vars (including defaults)
     println!("cargo:rustc-env=APP_MODE={}", app_mode);
     println!("cargo:rustc-env=SUPABASE_URL={}", supabase_url);
     println!("cargo:rustc-env=SUPABASE_ANON_KEY={}", supabase_anon_key);
+    println!(
+        "cargo:rustc-env=GOOGLE_OAUTH_CLIENT_ID={}",
+        google_oauth_client_id
+    );
 
     // Also print any other SUPABASE_ prefixed variables
     for (key, value) in std::env::vars() {

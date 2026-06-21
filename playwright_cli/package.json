@@ -1,0 +1,15 @@
+{
+  "name": "content-profile-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright smoke tests for the content_profile Dioxus app",
+  "scripts": {
+    "test": "yarn playwright test",
+    "test:headed": "yarn playwright test --headed",
+    "report": "yarn playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22"
+  }
+}

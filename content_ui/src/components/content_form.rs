@@ -1,20 +1,44 @@
 use content_sdk::ContentTagsContext;
 use content_sdk::TagContext;
 use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
+#[cfg(target_arch = "wasm32")]
+use content_sdk::services::drive::upload_image as drive_upload_image;
+use content_sdk::utils::config::Config;
+#[cfg(target_arch = "wasm32")]
+use content_sdk::utils::format_image;
 use content_sdk::utils::markdown::update_tags_in_frontmatter;
 use content_sdk::utils::{
-    format_blockquote, format_bold, format_code, format_code_block, format_heading, format_image,
-    format_italic, format_link, format_ordered_list, format_table, format_unordered_list,
-    render_markdown_to_html,
+    format_blockquote, format_bold, format_code, format_code_block, format_heading, format_italic,
+    format_link, format_ordered_list, format_table, format_unordered_list, render_markdown_to_html,
 };
 use dioxus::prelude::*;
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 fn append_markdown(current_body: &str, markdown: &str) -> String {
     if current_body.trim().is_empty() {
         markdown.to_string()
     } else {
         format!("{}\n\n{}", current_body, markdown)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn guess_mime_from_name(name: &str) -> &'static str {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".bmp") {
+        "image/bmp"
+    } else {
+        "application/octet-stream"
     }
 }
 
@@ -34,11 +58,12 @@ pub struct ContentFormProps {
 fn EditModeBodyEditor(
     body: Signal<String>,
     is_submitting: Signal<bool>,
+    is_uploading_image: Signal<bool>,
     handle_format_bold: EventHandler<MouseEvent>,
     handle_format_italic: EventHandler<MouseEvent>,
     handle_format_heading: EventHandler<MouseEvent>,
     handle_format_link: EventHandler<MouseEvent>,
-    handle_format_image: EventHandler<MouseEvent>,
+    on_upload_image: EventHandler<()>,
     handle_format_code: EventHandler<MouseEvent>,
     handle_format_code_block: EventHandler<MouseEvent>,
     handle_format_unordered_list: EventHandler<MouseEvent>,
@@ -84,10 +109,14 @@ fn EditModeBodyEditor(
             button {
                 r#type: "button",
                 class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_image,
-                disabled: *is_submitting.read(),
-                title: "Image",
-                "🖼️"
+                onclick: move |_| on_upload_image.call(()),
+                disabled: *is_submitting.read() || *is_uploading_image.read(),
+                title: if *is_uploading_image.read() { "Uploading..." } else { "Upload image to Google Drive" },
+                if *is_uploading_image.read() {
+                    { "⏳" }
+                } else {
+                    { "🖼️" }
+                }
             }
             button {
                 r#type: "button",
@@ -629,6 +658,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut is_submitting = use_signal(|| false);
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
+    let mut is_uploading_image = use_signal(|| false);
     let tag_to_remove = use_signal(|| None::<(i32, String)>);
     let show_clear_all_confirmation = use_signal(|| false);
 
@@ -814,10 +844,97 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         *body.write() = append_markdown(&current_body, &markdown);
     };
 
-    let handle_format_image = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_image("Alt text", "https://");
-        *body.write() = append_markdown(&current_body, &markdown);
+    let config = use_context::<Memo<Config>>();
+
+    let handle_trigger_image_upload = move |_| {
+        if config.read().google_oauth_client_id.is_none() {
+            error_message.set(Some(
+                "Google Drive not configured. Set GOOGLE_OAUTH_CLIENT_ID in .env".to_string(),
+            ));
+            warn!("image upload requested but GOOGLE_OAUTH_CLIENT_ID is missing");
+            return;
+        }
+        document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
+    };
+
+    let handle_image_file_selected = move |e: Event<FormData>| {
+        let client_id = match config.read().google_oauth_client_id.clone() {
+            Some(id) => id,
+            None => {
+                error_message.set(Some("Google Drive not configured".to_string()));
+                return;
+            }
+        };
+
+        let files = e.files();
+        if files.is_empty() {
+            warn!("image file selected but no files attached");
+            return;
+        }
+        let file_engine = files[0].clone();
+
+        let file_name = file_engine.name();
+        debug!("image file selected: {file_name}");
+
+        is_uploading_image.set(true);
+        error_message.set(None);
+
+        #[cfg(target_arch = "wasm32")]
+        let mut body_signal = body;
+        #[cfg(target_arch = "wasm32")]
+        let mut error_message_signal = error_message;
+        #[cfg(target_arch = "wasm32")]
+        let mut is_uploading_signal = is_uploading_image;
+
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            let bytes = match file_engine.read_bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    let msg = format!("Failed to read file: {e}");
+                    error!("{msg}");
+                    error_message_signal.set(Some(msg));
+                    is_uploading_signal.set(false);
+                    return;
+                }
+            };
+
+            let mime = guess_mime_from_name(&file_name);
+            let alt_text = file_name
+                .rsplit('.')
+                .next()
+                .map(|ext| {
+                    let base = file_name.trim_end_matches(ext).trim_end_matches('.');
+                    if base.is_empty() { "image" } else { base }
+                })
+                .unwrap_or("image");
+
+            match drive_upload_image(&client_id, bytes.as_ref(), mime, &file_name).await {
+                Ok(url) => {
+                    let current_body = body_signal.read().clone();
+                    let markdown = format_image(alt_text, &url);
+                    *body_signal.write() = append_markdown(&current_body, &markdown);
+                    debug!("image inserted: ![{alt_text}]({url})");
+                }
+                Err(msg) => {
+                    error!("drive upload failed: {msg}");
+                    error_message_signal.set(Some(format!("Image upload failed: {msg}")));
+                }
+            }
+            is_uploading_signal.set(false);
+        });
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (
+                client_id,
+                file_engine,
+                body,
+                error_message,
+                is_uploading_image,
+            );
+            error!("image upload is only supported on the web target");
+        }
     };
 
     let handle_format_table = move |_| {
@@ -899,6 +1016,15 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     });
 
     rsx! {
+        // hidden file input for Google Drive image upload
+        input {
+            id: "gdrive-image-input",
+            r#type: "file",
+            accept: "image/*",
+            class: "hidden",
+            onchange: handle_image_file_selected,
+        }
+
         div {
             class: "bg-white shadow rounded-lg",
 
@@ -1031,11 +1157,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                 EditModeBodyEditor {
                                     body,
                                     is_submitting,
+                                    is_uploading_image,
                                     handle_format_bold: handle_format_bold,
                                     handle_format_italic: handle_format_italic,
                                     handle_format_heading: handle_format_heading,
                                     handle_format_link: handle_format_link,
-                                    handle_format_image: handle_format_image,
+                                    on_upload_image: handle_trigger_image_upload,
                                     handle_format_code: handle_format_code,
                                     handle_format_code_block: handle_format_code_block,
                                     handle_format_unordered_list: handle_format_unordered_list,

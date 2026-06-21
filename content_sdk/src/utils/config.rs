@@ -10,6 +10,7 @@ pub struct Config {
     pub supabase_url: Option<String>,
     pub supabase_anon_key: Option<String>,
     pub jwt_token: Option<String>,
+    pub google_oauth_client_id: Option<String>,
 }
 
 impl Config {
@@ -18,6 +19,7 @@ impl Config {
         supabase_url: &str,
         supabase_anon_key: &str,
         jwt_token: Option<String>,
+        google_oauth_client_id: Option<String>,
     ) -> Self {
         let mode = match mode {
             "supabase" => AppMode::Supabase,
@@ -41,11 +43,22 @@ impl Config {
             (None, None)
         };
 
+        let google_oauth_client_id_opt = if google_oauth_client_id
+            .as_deref()
+            .unwrap_or_default()
+            .is_empty()
+        {
+            None
+        } else {
+            google_oauth_client_id
+        };
+
         Config {
             mode,
             supabase_url: supabase_url_opt,
             supabase_anon_key: supabase_anon_key_opt,
             jwt_token,
+            google_oauth_client_id: google_oauth_client_id_opt,
         }
     }
 

@@ -15,6 +15,7 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 - **Error Handling**: Comprehensive error handling and user feedback
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
 - **Modular Architecture**: Clean separation between SDK and UI layers
+- **Google Drive Image Upload**: Upload images directly from the editor to your Google Drive and embed via public URL
 
 ## 🛠 Technology Stack
 
@@ -97,6 +98,14 @@ content_profile/
 │  └─ Cargo.toml              # Proxy dependencies
 ├─ supabase_client/            # Supabase client library
 │  └─ Cargo.toml              # Supabase dependencies
+├─ playwright_cli/             # Playwright smoke tests (Dockerised)
+│  ├─ tests/                  # Page specs + fixtures
+│  │  ├─ home.spec.ts        # Public-page smoke tests
+│  │  ├─ dashboard.spec.ts   # Authenticated-page tests (session seed + Supabase mock)
+│  │  └─ fixtures/           # `seedFakeSession` + `mockSupabaseRest` helpers
+│  ├─ docker-compose.test.yml # Test container on `content_profile_content_net`
+│  ├─ Dockerfile              # Node 20 + Playwright + Chromium
+│  └─ package.json            # Yarn-managed deps
 ├─ build.sh                    # Host build + Docker compose script
 ├─ docker-compose.yml          # Docker Compose orchestration
 ├─ Dockerfile.ui               # nginx + WASM static files
@@ -170,11 +179,62 @@ Edit `.env` and add your Supabase credentials:
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key-here
+APP_MODE=supabase
+GOOGLE_OAUTH_CLIENT_ID=your-google-oauth-client-id-here
 ```
 
 ⚠️ **Important**: Never commit `.env` to version control!
 
-### 4. Create Database Schema
+### 4. Configure Google Drive (Image Upload)
+
+Image uploads in the content editor go directly to your Google Drive and return a public URL (format: `https://drive.google.com/thumbnail?id={fileId}&sz=w1000`). This is a client-side OAuth flow — no backend needed.
+
+#### Enable the Drive API
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project
+3. Navigate to **APIs & Services → Library**
+4. Search for **Google Drive API** → click **Enable**
+
+#### Configure OAuth Consent Screen
+
+1. Navigate to **APIs & Services → OAuth consent screen**
+2. User type: **External** → Create
+3. Fill in app name, support email, developer email
+4. Add your own Google email under **Test users**
+5. Save through the remaining steps (scopes can be skipped)
+
+#### Create OAuth Client ID
+
+1. Navigate to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+2. Application type: **Web application**
+3. Add **Authorized JavaScript origins**:
+   - `http://localhost:8080` (dx serve dev server)
+   - `http://localhost:6190` (Pingora proxy)
+   - Your production URL (e.g. `https://your-domain.com`)
+4. Click **Create** and copy the **Client ID** (format: `xxxxx.apps.googleusercontent.com`)
+
+#### Set Environment Variable
+
+Add the Client ID to your `.env`:
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=123456789-abcdefg.apps.googleusercontent.com
+```
+
+If empty, the image upload feature silently disables — no crash.
+
+#### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `origin_mismatch` in popup | Add the exact origin to authorized JavaScript origins |
+| `access_blocked` | Add your email to consent screen → Test users |
+| `403 drive_api_used` | Enable the Drive API (step above) |
+
+For more detail, see `.plans/10_image_upload_google_drive.md`.
+
+### 5. Create Database Schema
 
 Run the SQL schema in your Supabase SQL Editor:
 
@@ -191,7 +251,7 @@ Or use the Supabase CLI:
 supabase db reset --db-url "postgresql://postgres:[YOUR-PASSWORD]@db.[your-project].supabase.co:5432/postgres"
 ```
 
-### 5. Set Up Row Level Security (RLS)
+### 6. Set Up Row Level Security (RLS)
 
 The schema includes RLS policies to protect your data. Ensure they're enabled:
 
@@ -656,7 +716,7 @@ DELETE /content?id=1
 
 ## 🧪 Testing
 
-### Run Tests
+### Unit / Integration Tests (Rust)
 
 ```bash
 cargo test
@@ -668,6 +728,77 @@ cargo test
 cargo clippy
 cargo fmt --check
 ```
+
+### Playwright Smoke Tests (`playwright_cli/`)
+
+Dockerised Playwright (Chromium) tests that verify the Dioxus WASM app renders correctly, including authenticated pages. The test container joins the app's Docker network and reaches the proxy at `http://content_proxy:6190`.
+
+#### Prerequisites
+
+The app must be running first:
+
+```bash
+# from the project root
+docker compose up -d
+docker compose ps -a   # both content_proxy + content_ui must be Up
+```
+
+#### Run the tests
+
+```bash
+cd playwright_cli
+docker compose -f docker-compose.test.yml run --rm playwright
+```
+
+Rebuild the image after editing tests or fixtures:
+
+```bash
+docker compose -f docker-compose.test.yml build
+```
+
+Point at a different URL (e.g. when running the app on localhost):
+
+```bash
+APP_URL=http://localhost:6190 docker compose -f docker-compose.test.yml run --rm playwright
+```
+
+#### Testing authenticated pages
+
+Protected routes (`/dashboard`, `/content/edit/:id`, `/tags`, `/tags/edit/:id`) require a session. The client-side check is only `now < session.expires_at` (`content_ui/src/app.rs`), with no JWT signature validation, so tests bypass login by seeding `localStorage`.
+
+Two reusable fixtures live under `playwright_cli/tests/fixtures/`:
+
+- **`auth.ts` — `seedFakeSession(page, opts?)`**: injects a fake, non-expiring session into `localStorage["cms_auth_session"]` via `page.addInitScript`, so it's in place before the app boots on every navigation. Suitable for UI rendering / navigation / form-display tests.
+- **`supabaseMock.ts` — `mockSupabaseRest(page, handler?)`**: intercepts `**/rest/v1/**` requests (including the app's cross-origin calls to Supabase Cloud) and returns canned rows for `content`, `tags`, and `content_tags`. Automatically sets `content-range` for paginated calls and `Access-Control-Expose-Headers: content-range` so the WASM `fetch` caller can read the header.
+
+Example:
+
+```ts
+import { test, expect } from "@playwright/test";
+import { seedFakeSession } from "./fixtures/auth";
+import { mockSupabaseRest, DEFAULT_MOCK_CONTENT } from "./fixtures/supabaseMock";
+
+test("dashboard shows mocked content", async ({ page }) => {
+  await seedFakeSession(page);
+  await mockSupabaseRest(page);
+  await page.goto("/dashboard");
+  await expect(page.getByText(DEFAULT_MOCK_CONTENT[0].title)).toBeVisible({ timeout: 15_000 });
+});
+```
+
+Run locally without Docker (the app must still be running):
+
+```bash
+cd playwright_cli
+yarn install
+yarn playwright install chromium
+APP_URL=http://localhost:6190 yarn test
+```
+
+After a run, HTML report and failure artefacts are written to:
+
+- `playwright_cli/playwright-report/`
+- `playwright_cli/test-results/` — screenshots / videos on failure
 
 ## 🐛 Troubleshooting
 

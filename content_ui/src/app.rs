@@ -42,10 +42,21 @@ pub fn App() -> Element {
         let mode = env!("APP_MODE");
         let supabase_url = env!("SUPABASE_URL");
         let supabase_anon_key = env!("SUPABASE_ANON_KEY");
+        let google_oauth_client_id = env!("GOOGLE_OAUTH_CLIENT_ID");
         let token = jwt_token.read().clone();
 
         tracing::debug!("Creating config - JWT token present: {}", token.is_some());
-        Config::new(mode, supabase_url, supabase_anon_key, token)
+        Config::new(
+            mode,
+            supabase_url,
+            supabase_anon_key,
+            token,
+            if google_oauth_client_id.is_empty() {
+                None
+            } else {
+                Some(google_oauth_client_id.to_string())
+            },
+        )
     });
 
     // Provide signals as contexts so components can access them
