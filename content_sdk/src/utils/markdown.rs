@@ -1,37 +1,71 @@
 use crate::models::Tag;
-use pulldown_cmark::{Options, Parser, html};
+use pulldown_cmark::{Event, Options, Parser, Tag as MdTag, TagEnd, html};
 
 const FRONTMATTER_START: &str = "---";
 const FRONTMATTER_END: &str = "---";
 const TAGS_KEY: &str = "tags";
 
-/// Converts markdown text to HTML, properly handling newlines
+/// CSS class wrapping every rendered markdown tree.
+/// See `content_ui/assets/markdown.css` for the styles.
+pub const MARKDOWN_CONTAINER_CLASS: &str = "md-render";
+
+/// Converts markdown to HTML with correct whitespace and indentation handling.
 ///
-/// Newlines (\n) are converted to line breaks by adding two spaces before them,
-/// which markdown parsers interpret as `<br>` tags.
-///
-/// # Arguments
-/// * `markdown` - The markdown text to convert
-///
-/// # Returns
-/// * HTML string with proper newline handling
-///
-/// # Examples
-/// ```ignore
-/// let html = render_markdown_to_html("Hello\nWorld");
-/// // Returns: "<p>Hello<br>World</p>"
-/// ```
+/// Unlike a blind `\n -> "  \n"` replace, this walks the parser event stream so:
+/// - Inside **code blocks** (fenced ``` or indented), line breaks and indentation
+///   are preserved verbatim — no spurious `<br>` injected.
+/// - Outside code blocks, a single newline becomes a hard line break (`<br>`)
+///   so prose wraps the way the author typed it.
+/// - GFM tables, strikethrough, and task lists are enabled.
 pub fn render_markdown_to_html(markdown: &str) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TASKLISTS);
 
-    let processed_markdown = markdown.replace("\n", "  \n");
-    let parser = Parser::new_ext(&processed_markdown, options);
+    let parser = Parser::new_ext(markdown, options);
+    let transformed = SoftBreakToHardOutsideCode::new(parser);
+
     let mut html_output = String::new();
-    html::push_html(&mut html_output, parser);
+    html::push_html(&mut html_output, transformed);
     html_output
+}
+
+/// Iterator adapter that converts `SoftBreak` into `HardBreak` only while the
+/// cursor is **not** inside a code block. Inside code, soft breaks are kept as
+/// soft breaks (rendered as plain newlines by `pulldown-cmark::html`), so the
+/// author's indentation and line wrapping survive intact.
+struct SoftBreakToHardOutsideCode<I> {
+    inner: I,
+    in_code: bool,
+}
+
+impl<I> SoftBreakToHardOutsideCode<I> {
+    fn new(inner: I) -> Self {
+        Self {
+            inner,
+            in_code: false,
+        }
+    }
+}
+
+impl<'a, I: Iterator<Item = Event<'a>>> Iterator for SoftBreakToHardOutsideCode<I> {
+    type Item = Event<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ev = self.inner.next()?;
+        match ev {
+            Event::Start(MdTag::CodeBlock(_)) => {
+                self.in_code = true;
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                self.in_code = false;
+            }
+            Event::SoftBreak if !self.in_code => return Some(Event::HardBreak),
+            _ => {}
+        }
+        Some(ev)
+    }
 }
 
 pub fn add_tag_frontmarkter(content: &str, tags: &[Tag]) -> String {
@@ -265,5 +299,96 @@ Hello world"#;
         let html = render_markdown_to_html(markdown);
         assert!(html.contains("href=\"https://example.com\""));
         assert!(html.contains("Link"));
+    }
+
+    #[test]
+    fn test_render_fenced_code_block_preserves_newlines() {
+        // Code blocks must keep the author's line breaks verbatim — no injected <br>.
+        let markdown = "```rust\nfn main() {\n    let x = 1;\n}\n```";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<pre>"), "expected <pre> wrapper");
+        assert!(html.contains("<code"), "expected <code> element");
+        assert!(!html.contains("<br"), "code blocks must not contain <br>");
+        assert!(html.contains("fn main()"));
+        assert!(html.contains("let x = 1;"));
+    }
+
+    #[test]
+    fn test_render_indented_code_block_no_br() {
+        // Indented (4-space) code block — also must not get <br> injections.
+        let markdown = "    line one\n    line two\n    line three";
+        let html = render_markdown_to_html(markdown);
+        assert!(
+            html.contains("<pre"),
+            "expected indented code block as <pre>"
+        );
+        assert!(
+            !html.contains("<br"),
+            "indented code block must not contain <br>"
+        );
+    }
+
+    #[test]
+    fn test_render_nested_list_indent_preserved() {
+        let markdown = "- top\n  - nested\n    - deeper\n- back";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("<li>top"));
+        assert!(html.contains("nested"));
+        assert!(html.contains("deeper"));
+        // Two levels of nesting => at least two nested <ul> opens.
+        assert_eq!(html.matches("<ul").count(), 3);
+    }
+
+    #[test]
+    fn test_render_gfm_task_list() {
+        let markdown = "- [x] done\n- [ ] todo";
+        let html = render_markdown_to_html(markdown);
+        assert!(
+            html.contains("<input"),
+            "task list must render checkbox inputs"
+        );
+        assert!(html.contains("type=\"checkbox\""));
+        assert!(html.contains("checked"), "checked task should be marked");
+        assert!(html.contains("done"));
+        assert!(html.contains("todo"));
+    }
+
+    #[test]
+    fn test_render_table() {
+        let markdown = "| Name | Age |\n| --- | --- |\n| Ada | 36 |";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<table>"));
+        assert!(html.contains("<thead>"));
+        assert!(html.contains("<th>Name</th>"));
+        assert!(html.contains("<td>Ada</td>"));
+    }
+
+    #[test]
+    fn test_render_blockquote_and_hr() {
+        let markdown = "> wisdom\n\n---\n\nafter";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<blockquote>"));
+        assert!(html.contains("wisdom"));
+        assert!(html.contains("<hr"));
+    }
+
+    /// Regression: leading whitespace inside fenced code blocks must survive
+    /// in the HTML output (the visible indent problem). CSS handles display,
+    /// but the bytes must contain the spaces.
+    #[test]
+    fn test_code_block_leading_whitespace_survives() {
+        let markdown = "```rust\n       let state = if led.is_set_low() {\n                Level::High\n            } else {\n                Level::Low\n            };\n```";
+        let html = render_markdown_to_html(markdown);
+        assert!(html.contains("<pre"));
+        // 7-space indent on first line must be in the output verbatim.
+        assert!(
+            html.contains("       let state"),
+            "leading whitespace lost; got: {html}"
+        );
+        // 16-space indent on the inner line must also survive.
+        assert!(html.contains("                Level::High"));
+        // And the relative indent of `} else {`.
+        assert!(html.contains("            } else {"));
     }
 }

@@ -1,0 +1,211 @@
+/* Markdown rendering styles.
+   Applied to any container using `content_sdk::utils::MARKDOWN_CONTAINER_CLASS`
+   (`md-render`). Self-contained — does not depend on the Tailwind typography
+   plugin. Works on light backgrounds (the app uses white cards). */
+
+.md-render {
+    color: #1f2937; /* gray-800 */
+    font-size: 1rem;
+    line-height: 1.75;
+    word-wrap: break-word;
+}
+
+.md-render > :first-child {
+    margin-top: 0;
+}
+.md-render > :last-child {
+    margin-bottom: 0;
+}
+
+/* Headings */
+.md-render h1,
+.md-render h2,
+.md-render h3,
+.md-render h4,
+.md-render h5,
+.md-render h6 {
+    color: #111827; /* gray-900 */
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 1.6em;
+    margin-bottom: 0.6em;
+}
+.md-render h1 {
+    font-size: 1.875em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #e5e7eb;
+}
+.md-render h2 {
+    font-size: 1.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #e5e7eb;
+}
+.md-render h3 {
+    font-size: 1.25em;
+}
+.md-render h4 {
+    font-size: 1.1em;
+}
+.md-render h5 {
+    font-size: 1em;
+}
+.md-render h6 {
+    font-size: 0.9em;
+    color: #6b7280;
+}
+
+/* Paragraphs */
+.md-render p {
+    margin-top: 0;
+    margin-bottom: 1em;
+}
+
+/* Links */
+.md-render a {
+    color: #4f46e5; /* indigo-600 */
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.md-render a:hover {
+    color: #4338ca;
+}
+
+/* Strong / emphasis / strikethrough */
+.md-render strong {
+    font-weight: 700;
+    color: #111827;
+}
+.md-render em {
+    font-style: italic;
+}
+.md-render del {
+    color: #6b7280;
+}
+
+/* Lists */
+.md-render ul,
+.md-render ol {
+    margin-top: 0;
+    margin-bottom: 1em;
+    padding-left: 1.6em;
+}
+.md-render ul {
+    list-style: disc;
+}
+.md-render ol {
+    list-style: decimal;
+}
+.md-render li {
+    margin-top: 0.25em;
+}
+.md-render li > ul,
+.md-render li > ol {
+    margin-top: 0.25em;
+    margin-bottom: 0;
+}
+/* GFM task list — pulldown-cmark emits <input type="checkbox"> */
+.md-render li::marker {
+    color: #4f46e5;
+}
+.md-render input[type="checkbox"] {
+    margin-right: 0.5em;
+    transform: translateY(1px);
+}
+
+/* Blockquote */
+.md-render blockquote {
+    margin: 0 0 1em 0;
+    padding: 0.25em 1em;
+    border-left: 4px solid #c7d2fe; /* indigo-200 */
+    background: #f5f3ff; /* violet-50 */
+    color: #374151;
+}
+.md-render blockquote > :first-child {
+    margin-top: 0;
+}
+.md-render blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+/* Horizontal rule */
+.md-render hr {
+    border: 0;
+    border-top: 1px solid #e5e7eb;
+    margin: 1.6em 0;
+}
+
+/* Inline code */
+.md-render code {
+    font-family:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.875em;
+    background: #f3f4f6; /* gray-100 */
+    color: #db2777; /* pink-600 */
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+}
+.md-render pre code {
+    color: inherit;
+    background: transparent;
+    padding: 0;
+    font-size: 0.875em;
+}
+
+/* Code block */
+.md-render pre {
+    margin: 0 0 1em 0;
+    padding: 1em 1.25em;
+    background: #0f172a; /* slate-900 */
+    color: #e2e8f0; /* slate-200 */
+    border-radius: 8px;
+    overflow-x: auto;
+    line-height: 1.55;
+    font-size: 0.875em;
+    /* Explicit: protect against UA/preflight differences so leading
+       whitespace and indentation in code blocks are preserved. */
+    white-space: pre;
+    tab-size: 4;
+}
+
+/* Tables */
+.md-render table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 1em 0;
+    font-size: 0.95em;
+    display: block;
+    overflow-x: auto;
+}
+.md-render thead {
+    background: #f9fafb; /* gray-50 */
+    border-bottom: 2px solid #e5e7eb;
+}
+.md-render th,
+.md-render td {
+    text-align: left;
+    padding: 0.5em 0.75em;
+    border: 1px solid #e5e7eb;
+    vertical-align: top;
+}
+.md-render th {
+    font-weight: 600;
+    color: #111827;
+}
+.md-render tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+
+/* Images */
+.md-render img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 0.5em 0;
+}
+
+/* Hard line break inside paragraphs should not double-space with <p> margins */
+.md-render p br + br {
+    display: block;
+    content: "";
+    margin-top: 0.5em;
+}

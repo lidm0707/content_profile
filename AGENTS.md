@@ -318,3 +318,63 @@ When you need Promise-based JS APIs from Rust/WASM:
 - `e.files()` returns `Vec<FileData>` (not Option).
 - `FileData::read_bytes().await` returns `bytes::Bytes`.
 - Use `bytes.as_ref()` to get `&[u8]`.
+
+# Markdown Rendering
+
+Markdown → HTML lives in `content_sdk::utils::markdown::render_markdown_to_html`.
+It is the **single** render path used by both `ContentDetail` and the form's
+preview pane.
+
+## How to render markdown
+
+```rust
+use content_sdk::utils::{MARKDOWN_CONTAINER_CLASS, render_markdown_to_html};
+
+let html = render_markdown_to_html(&body);
+
+rsx! {
+    div {
+        class: "{MARKDOWN_CONTAINER_CLASS}",
+        dangerous_inner_html: html,
+    }
+}
+```
+
+**Always** wrap the output in a container using `MARKDOWN_CONTAINER_CLASS`
+(`md-render`). The styles for headings, lists, tables, blockquotes, code
+blocks, etc. are scoped under `.md-render` in `content_ui/assets/markdown.css`.
+
+## Do NOT use Tailwind `prose` classes
+
+This project does **not** install the `@tailwindcss/typography` plugin, so
+`class: "prose prose-sm max-w-none"` does nothing — the rendered HTML ends up
+completely unstyled. Use `MARKDOWN_CONTAINER_CLASS` instead.
+
+## Whitespace / indentation handling
+
+The renderer walks the `pulldown-cmark` event stream and converts
+`SoftBreak → HardBreak` **only outside** code blocks, so:
+
+- In prose, a single `\n` becomes `<br>` (the author's line wraps survive).
+- In fenced (```) or indented (4-space) code blocks, newlines and leading
+  whitespace are preserved verbatim.
+- GFM tables, strikethrough, and task lists are enabled.
+
+The CSS pins `white-space: pre; tab-size: 4;` on `.md-render pre` — this is
+load-bearing. Without it, leading whitespace inside `<pre>` can collapse
+under the Tailwind v4 preflight cascade. Do not remove.
+
+## Adding the stylesheet
+
+`markdown.css` is wired in `content_ui/src/app.rs`:
+
+```rust
+const MARKDOWN_CSS: Asset = asset!("/assets/markdown.css");
+
+rsx! {
+    document::Stylesheet { href: MARKDOWN_CSS }
+}
+```
+
+If you add new markdown element styles, edit `content_ui/assets/markdown.css`
+under the `.md-render` selector.

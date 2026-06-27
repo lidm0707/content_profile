@@ -1,7 +1,7 @@
 use crate::routes::Route;
 use content_sdk::contexts::{ContentContext, TagContext};
 use content_sdk::models::{Content, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
-use content_sdk::utils::render_markdown_to_html;
+use content_sdk::utils::{MARKDOWN_CONTAINER_CLASS, render_markdown_to_html};
 use dioxus::prelude::*;
 
 /// Props for the tag button component
@@ -214,7 +214,7 @@ pub fn ContentDetail(props: ContentDetailProps) -> Element {
                         dd {
                             class: "mt-1 text-sm text-gray-900 sm:mt-0",
                             div {
-                                class: "prose prose-sm max-w-none",
+                                class: "{MARKDOWN_CONTAINER_CLASS}",
                                 dangerous_inner_html: formatted_body,
                             }
                         }

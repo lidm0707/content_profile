@@ -5,6 +5,7 @@ use content_sdk::contexts::{ContentContext, ContentTagsContext, TagContext, User
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
+const MARKDOWN_CSS: Asset = asset!("/assets/markdown.css");
 
 /// Root application component that sets up the router and global providers
 #[component]
@@ -123,6 +124,7 @@ pub fn App() -> Element {
         // Document head elements
         document::Link { rel: "icon", href: FAVICON }
         document::Stylesheet { href: TAILWIND_CSS }
+        document::Stylesheet { href: MARKDOWN_CSS }
 
         Router::<crate::routes::Route> {}
     }

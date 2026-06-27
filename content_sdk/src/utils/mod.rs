@@ -1,7 +1,7 @@
 pub mod config;
 pub mod markdown;
 
-pub use markdown::render_markdown_to_html;
+pub use markdown::{MARKDOWN_CONTAINER_CLASS, render_markdown_to_html};
 
 /// Wraps text with markdown syntax
 pub fn wrap_with_markdown(text: &str, before: &str, after: &str) -> String {

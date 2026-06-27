@@ -16,6 +16,7 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
 - **Modular Architecture**: Clean separation between SDK and UI layers
 - **Google Drive Image Upload**: Upload images directly from the editor to your Google Drive and embed via public URL
+- **Markdown Rendering**: GFM-aware markdown → HTML (tables, strikethrough, task lists) with code blocks that preserve indentation and a self-contained styling pipeline
 
 ## 🛠 Technology Stack
 
@@ -877,6 +878,7 @@ RUST_LOG=debug dx serve
 - Modify `assets/main.css` for custom styles
 - Edit `assets/tailwind.css` for Tailwind configuration
 - Customize colors, fonts, and spacing in components
+- **Markdown content**: edit `content_ui/assets/markdown.css` to restyle rendered markdown (headings, lists, tables, blockquotes, code blocks, etc.). All selectors are scoped under `.md-render`. To use the styles, wrap rendered HTML in a container with `content_sdk::utils::MARKDOWN_CONTAINER_CLASS` (see `AGENTS.md` → "Markdown Rendering").
 
 ### Database
 
@@ -942,10 +944,12 @@ For issues, questions, or contributions:
 - [x] Content CRUD operations
 - [x] Tag CRUD operations
 - [x] Reactive state management with contexts
+- [x] Pagination for content lists
+- [x] Image upload to Google Drive
+- [x] Markdown rendering with indentation-preserving code blocks
 
 ### Planned Features
 
-- [ ] Image upload functionality
 - [ ] Rich text editor integration
 - [ ] Search functionality
 - [ ] Content versioning
@@ -960,7 +964,6 @@ For issues, questions, or contributions:
 
 - [ ] Implement caching strategy
 - [ ] Optimize database queries
-- [ ] Add pagination for content lists
 - [ ] Implement lazy loading for images
 - [ ] Optimize WASM bundle size
 

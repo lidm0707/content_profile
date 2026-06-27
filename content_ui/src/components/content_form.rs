@@ -8,8 +8,9 @@ use content_sdk::utils::config::Config;
 use content_sdk::utils::format_image;
 use content_sdk::utils::markdown::update_tags_in_frontmatter;
 use content_sdk::utils::{
-    format_blockquote, format_bold, format_code, format_code_block, format_heading, format_italic,
-    format_link, format_ordered_list, format_table, format_unordered_list, render_markdown_to_html,
+    MARKDOWN_CONTAINER_CLASS, format_blockquote, format_bold, format_code, format_code_block,
+    format_heading, format_italic, format_link, format_ordered_list, format_table,
+    format_unordered_list, render_markdown_to_html,
 };
 use dioxus::prelude::*;
 use tracing::{debug, error, warn};
@@ -193,7 +194,7 @@ fn PreviewModeBodyEditor(body: Signal<String>) -> Element {
 
             } else {
                 div {
-                        class: "prose prose-sm max-w-none whitespace-pre-wrap",
+                        class: "{MARKDOWN_CONTAINER_CLASS}",
                         dangerous_inner_html: render_markdown_to_html(&body.read()),
                     }
             }
