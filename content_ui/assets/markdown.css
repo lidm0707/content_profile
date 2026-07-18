@@ -167,9 +167,14 @@
     tab-size: 4;
 }
 
-/* Tables */
+/* Tables
+   `display: block` + `width: 100%` collapses the table to its intrinsic
+   content width because the browser stops running table layout on a block.
+   Use `min-width: 100%` + `width: max-content` so the table fills the
+   container when narrow and grows + scrolls when wide. */
 .md-render table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
     margin: 0 0 1em 0;
     font-size: 0.95em;

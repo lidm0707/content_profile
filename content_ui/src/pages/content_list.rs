@@ -1,4 +1,4 @@
-use crate::components::ContentList as ContentListComponent;
+use crate::components::{ContentTable, TagPills};
 use crate::routes::Route;
 use content_sdk::contexts::{ContentContext, ContentTagsContext, TagContext};
 use content_sdk::models::Content;
@@ -7,8 +7,10 @@ use dioxus::prelude::*;
 /// Props for the content list page
 #[derive(Clone, PartialEq, Props)]
 pub struct ContentListProps {
-    /// Tag to filter content by (empty string = show all content)
-    pub tag: String,
+    /// Tag to filter content by (empty string = show all content).
+    /// Wrapped in `ReadSignal` so `use_resource` re-runs automatically
+    /// when the route param changes (e.g. navigating tag -> tag).
+    pub tag: ReadSignal<String>,
 }
 
 /// Content list page - displays content filtered by tag
@@ -18,18 +20,19 @@ pub fn ContentList(props: ContentListProps) -> Element {
     let tag_context: TagContext = use_context();
     let content_tags_context: ContentTagsContext = use_context();
 
-    let tag_name_for_resource = props.tag.clone();
-    let tag_name = tag_name_for_resource.clone();
-    let tag_name_for_resource = tag_name.clone();
-    let tag_context_for_effect = tag_context.clone();
-    let content_tags_context_for_effect = content_tags_context.clone();
-    let content_context_for_effect = content_context.clone();
+    let tag_context_for_resource = tag_context.clone();
+    let tag_context_for_pills = tag_context.clone();
+    let content_tags_context_for_resource = content_tags_context.clone();
+    let content_context_for_resource = content_context.clone();
 
+    // `props.tag` is a `ReadOnlySignal<String>` — reading it inside the
+    // `use_resource` closure makes the resource re-run when the route param
+    // changes (so tag -> tag navigation refetches).
     let contents = use_resource(move || {
-        let tag_name = tag_name_for_resource.clone();
-        let tag_context = tag_context_for_effect.clone();
-        let content_tags_context = content_tags_context_for_effect.clone();
-        let content_context = content_context_for_effect.clone();
+        let tag_name = props.tag.read().clone();
+        let tag_context = tag_context_for_resource.clone();
+        let content_tags_context = content_tags_context_for_resource.clone();
+        let content_context = content_context_for_resource.clone();
 
         async move {
             if tag_name.is_empty() {
@@ -46,15 +49,47 @@ pub fn ContentList(props: ContentListProps) -> Element {
         }
     });
 
-    let tag_name_for_handlers = props.tag.clone();
+    // Fetch all tags so we can render the TagPills row (lets users switch
+    // tag -> tag without going back to the dashboard).
+    let tags_for_pills = use_resource(move || {
+        let tag_context = tag_context_for_pills.clone();
+        async move { tag_context.get_all_tags().await }
+    });
+
+    let tag_for_render = props.tag.read().clone();
+    let tag_for_pills_active = props.tag.read().clone();
+    let navigator = use_navigator();
 
     rsx! {
         div {
             class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8",
 
-            {render_header_section(&tag_name_for_handlers, contents)}
+            {render_header_section(&tag_for_render, contents)}
 
-            {render_content_section(contents)}
+            // Tag pills — stay visible so users can switch tags inline.
+            // Matches the dashboard's tag row.
+            div {
+                class: "mb-6",
+                match tags_for_pills.read().as_ref() {
+                    Some(Ok(tags)) => rsx! {
+                        TagPills {
+                            tags: tags.clone(),
+                            active_tag: tag_for_pills_active.clone(),
+                            on_click: move |name: String| {
+                                navigator.push(Route::ContentList { tag: name });
+                            },
+                        }
+                    },
+                    Some(Err(_)) => rsx! {
+                        p { class: "text-sm text-red-500", "Failed to load tags." }
+                    },
+                    None => rsx! {
+                        p { class: "text-sm text-gray-400", "Loading tags…" }
+                    },
+                }
+            }
+
+            {render_content_section(&tag_for_render, contents)}
         }
     }
 }
@@ -78,30 +113,12 @@ fn HeaderSection(tag_name: String, contents: Resource<Result<Vec<Content>, Strin
 
 fn render_title_section(tag_name: &str) -> Element {
     rsx! {
-        if !tag_name.is_empty() {
-            h2 {
-                class: "text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate flex items-center gap-3",
+        h2 {
+            class: "text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate",
+            if !tag_name.is_empty() {
                 "Content tagged with '{tag_name}'"
-
-                span {
-                    class: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800",
-                    "Filtered"
-                }
-            }
-
-            p {
-                class: "mt-1 text-sm text-gray-500",
-                "Showing all content items tagged with '{tag_name}'"
-            }
-        } else {
-            h2 {
-                class: "text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate",
+            } else {
                 "All Content"
-            }
-
-            p {
-                class: "mt-1 text-sm text-gray-500",
-                "Browse all content items in the system"
             }
         }
     }
@@ -187,13 +204,41 @@ fn render_action_buttons(
     }
 }
 
-fn render_content_section(contents: Resource<Result<Vec<Content>, String>>) -> Element {
+fn render_content_section(
+    tag_name: &str,
+    contents: Resource<Result<Vec<Content>, String>>,
+) -> Element {
     let contents_state = contents();
 
     match contents_state {
         None => rsx! { LoadingSpinner {} },
-        Some(Ok(content_list)) => rsx! { ContentListComponent { contents: content_list } },
+        Some(Ok(content_list)) => {
+            let active_filter = tag_name.to_string();
+            rsx! {
+                ContentEditOnRow {
+                    contents: content_list,
+                    active_filter,
+                }
+            }
+        }
         Some(Err(err)) => rsx! { ErrorSection { error: err.clone(), contents } },
+    }
+}
+
+/// Thin wrapper that owns the navigator and wires the table's `on_edit`
+/// callback to route navigation. Exists so we don't have to thread the
+/// (unnameable-in-prelude) `Navigator` type through helper functions.
+#[component]
+fn ContentEditOnRow(contents: Vec<Content>, active_filter: String) -> Element {
+    let navigator = use_navigator();
+    rsx! {
+        ContentTable {
+            contents,
+            active_filter,
+            on_edit: move |id: i32| {
+                navigator.push(Route::ContentEdit { id });
+            },
+        }
     }
 }
 

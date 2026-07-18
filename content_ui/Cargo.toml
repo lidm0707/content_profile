@@ -19,6 +19,9 @@ anyhow = "1.0"
 # Content SDK
 content_sdk = { path = "../content_sdk" }
 
+# Reslt table component library (Dioxus 0.7)
+reslt_core = { git = "https://github.com/lidm0707/reslt.git" }
+
 # Supabase client dependency
 supabase_client = { path = "../supabase_client" }
 

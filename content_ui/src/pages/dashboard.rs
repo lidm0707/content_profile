@@ -1,43 +1,26 @@
-use crate::components::{ContentList as ContentListComponent, StatCard};
+use crate::components::{ContentTable, Pagination, StatCard, TagPills};
 use crate::routes::Route;
 use content_sdk::contexts::{ContentContext, TagContext, UserContext};
-use content_sdk::models::{Content, Tag};
+use content_sdk::models::Content;
 use dioxus::prelude::*;
 use dioxus_router::Navigator;
 
-/// Tags section component - displays all available tags
+/// Tags section component - renders all available tags via the shared
+/// `TagPills` component.
 fn render_tags_section(
-    tags_result: Option<Result<Vec<Tag>, String>>,
+    tags_result: Option<Result<Vec<content_sdk::models::Tag>, String>>,
+    active_tag: String,
     navigator: Navigator,
 ) -> Element {
     match tags_result {
         Some(Ok(all_tags)) => {
-            if all_tags.is_empty() {
-                rsx! {
-                    div {
-                        class: "text-center py-8 bg-white rounded-lg shadow",
-                        p {
-                            class: "text-gray-500",
-                            "No tags found. Create your first tag to get started."
-                        }
-                    }
-                }
-            } else {
-                rsx! {
-                    div {
-                        class: "flex flex-wrap gap-2",
-                        for tag in all_tags {
-                            button {
-                                class: "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors",
-                                onclick: move |_| {
-                                    navigator.push(Route::ContentList {
-                                        tag: tag.name.clone(),
-                                    });
-                                },
-                                "{tag.name}"
-                            }
-                        }
-                    }
+            rsx! {
+                TagPills {
+                    tags: all_tags,
+                    active_tag,
+                    on_click: move |name: String| {
+                        navigator.push(Route::ContentList { tag: name });
+                    },
                 }
             }
         }
@@ -207,31 +190,6 @@ pub fn Dashboard() -> Element {
         tags.restart();
     };
 
-    let handle_previous_page = move |_| {
-        if current_page() > 1 {
-            current_page -= 1;
-        }
-    };
-
-    let handle_next_page = move |_| {
-        let current = current_page();
-        let total = contents
-            .read()
-            .as_ref()
-            .and_then(|r| r.as_ref().ok())
-            .map(|r| r.total_items)
-            .unwrap_or(0);
-        let max_page = if total > 0 {
-            total.div_ceil(page_size)
-        } else {
-            1
-        };
-
-        if current < max_page {
-            current_page += 1;
-        }
-    };
-
     rsx! {
         // Page header with mode indicator
         div {
@@ -244,39 +202,51 @@ pub fn Dashboard() -> Element {
         }
 
 
-        // Stats cards
+        // Stats — compact inline pills, wrap on small screens.
         div {
             class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
 
             div {
-                class: "grid grid-cols-1 gap-5 sm:grid-cols-3 mb-8",
+                class: "flex flex-wrap items-center gap-2 mb-8",
 
                 StatCard {
-                    label: "Total Content".to_string(),
+                    label: "Total".to_string(),
                     value: contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items).unwrap_or(0).to_string(),
                     value_color: "text-gray-900".to_string(),
+                    icon_bg: "bg-gray-100".to_string(),
+                    icon_path: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z".to_string(),
                 }
 
                 StatCard {
                     label: "Published".to_string(),
                     value: contents_data.read().iter().filter(|c| c.status == "published").count().to_string(),
                     value_color: "text-green-600".to_string(),
+                    icon_bg: "bg-green-100".to_string(),
+                    icon_path: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z".to_string(),
                 }
 
                 StatCard {
                     label: "Drafts".to_string(),
                     value: contents_data.read().iter().filter(|c| c.status == "draft").count().to_string(),
                     value_color: "text-yellow-600".to_string(),
+                    icon_bg: "bg-yellow-100".to_string(),
+                    icon_path: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z".to_string(),
                 }
+
                 StatCard {
                     label: "Local Only".to_string(),
                     value: contents_data.read().iter().filter(|c| c.synced_at.is_none()).count().to_string(),
                     value_color: "text-gray-600".to_string(),
+                    icon_bg: "bg-gray-100".to_string(),
+                    icon_path: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4".to_string(),
                 }
+
                 StatCard {
                     label: "Synced".to_string(),
                     value: contents_data.read().iter().filter(|c| c.synced_at.is_some()).count().to_string(),
                     value_color: "text-blue-600".to_string(),
+                    icon_bg: "bg-blue-100".to_string(),
+                    icon_path: "M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12".to_string(),
                 }
             }
 
@@ -292,7 +262,7 @@ pub fn Dashboard() -> Element {
                 "Tags"
             }
 
-            {render_tags_section(tags(), navigator)}
+            {render_tags_section(tags(), String::new(), navigator)}
         }
 
 
@@ -367,16 +337,20 @@ pub fn Dashboard() -> Element {
                     }
                 } else {
                     // Content list
-                    ContentListComponent {
-                        contents: contents_data.read().clone()
+                    ContentTable {
+                        contents: contents_data.read().clone(),
+                        on_edit: move |id: i32| {
+                            navigator.push(Route::ContentEdit { id });
+                        },
                     }
 
-                    // Pagination controls
+                    // Server-side pagination controls (same visual style
+                    // as the table's internal pagination).
                     {
-                        let total = contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items).unwrap_or(0);
-                        let current = current_page();
+                        let total = contents.read().as_ref().and_then(|r| r.as_ref().ok()).map(|r| r.total_items as usize).unwrap_or(0);
+                        let current = current_page() as usize;
                         let max_page = if total > 0 {
-                            total.div_ceil(page_size)
+                            total.div_ceil(page_size as usize)
                         } else {
                             1
                         };
@@ -384,115 +358,22 @@ pub fn Dashboard() -> Element {
                         if max_page > 1 {
                             Some(rsx! {
                                 div {
-                                    class: "mt-8 flex items-center justify-between border-t border-gray-200 pt-4",
-
-                                    div {
-                                        class: "flex-1 flex justify-between sm:hidden",
-
-                                        button {
-                                            disabled: current == 1,
-                                            onclick: handle_previous_page,
-                                            class: if current == 1 {
-                                                "relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-gray-50 cursor-not-allowed"
-                                            } else {
-                                                "relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                                            },
-                                            "Previous"
-                                        }
-
-                                        button {
-                                            disabled: current == max_page,
-                                            onclick: handle_next_page,
-                                            class: if current == max_page {
-                                                "ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-gray-50 cursor-not-allowed"
-                                            } else {
-                                                "ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                                            },
-                                            "Next"
-                                        }
-                                    }
-
-                                    div {
-                                        class: "hidden sm:flex-1 sm:flex sm:items-center sm:justify-between",
-
-                                        div {
-                                            p {
-                                                class: "text-sm text-gray-700",
-                                                "Showing ",
-                                                span {
-                                                    class: "font-medium",
-                                                    "{(current - 1) * page_size + 1}"
-                                                },
-                                                " to ",
-                                                span {
-                                                    class: "font-medium",
-                                                    "{current * page_size.min(total)}"
-                                                },
-                                                " of ",
-                                                span {
-                                                    class: "font-medium",
-                                                    "{total}"
-                                                },
-                                                " results"
+                                    class: "mt-2",
+                                    Pagination {
+                                        current_page: current,
+                                        total_pages: max_page,
+                                        total_items: total,
+                                        page_size: page_size as usize,
+                                        on_prev: move |_| {
+                                            if current_page() > 1 {
+                                                current_page -= 1;
                                             }
-                                        }
-
-                                        div {
-                                            div {
-                                                class: "inline-flex rounded-md shadow-sm -space-x-px",
-
-                                                button {
-                                                    disabled: current == 1,
-                                                    onclick: handle_previous_page,
-                                                    class: if current == 1 {
-                                                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
-                                                    } else {
-                                                        "relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                                                    },
-
-                                                    svg {
-                                                        class: "h-5 w-5",
-                                                        fill: "none",
-                                                        stroke: "currentColor",
-                                                        view_box: "0 0 24 24",
-                                                        path {
-                                                            stroke_linecap: "round",
-                                                            stroke_linejoin: "round",
-                                                            "stroke-width": 2,
-                                                            d: "M15 19l-7-7 7-7"
-                                                        }
-                                                    }
-                                                }
-
-                                                span {
-                                                    class: "relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700",
-                                                    "Page {current} of {max_page}"
-                                                }
-
-                                                button {
-                                                    disabled: current == max_page,
-                                                    onclick: handle_next_page,
-                                                    class: if current == max_page {
-                                                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-50 text-sm font-medium text-gray-300 cursor-not-allowed"
-                                                    } else {
-                                                        "relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                                                    },
-
-                                                    svg {
-                                                        class: "h-5 w-5",
-                                                        fill: "none",
-                                                        stroke: "currentColor",
-                                                        view_box: "0 0 24 24",
-                                                        path {
-                                                            stroke_linecap: "round",
-                                                            stroke_linejoin: "round",
-                                                            "stroke-width": 2,
-                                                            d: "M9 5l7 7-7 7"
-                                                        }
-                                                    }
-                                                }
+                                        },
+                                        on_next: move |_| {
+                                            if (current_page() as usize) < max_page {
+                                                current_page += 1;
                                             }
-                                        }
+                                        },
                                     }
                                 }
                             })
