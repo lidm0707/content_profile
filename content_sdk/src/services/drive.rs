@@ -1,9 +1,17 @@
 //! Google Drive image upload service (WASM only).
 //!
-//! Personal-tool client-side flow: injects a JS helper that uses Google Identity
-//! Services to obtain a `drive.file` token, uploads bytes directly to the Drive
-//! API via `multipart/related`, then sets `anyone/reader` so the returned
-//! `thumbnail` URL is publicly embeddable in markdown.
+//! Personal-tool client-side flow: preloads Google Identity Services on app
+//! init, acquires a `drive.file` OAuth token synchronously within a user
+//! gesture, then uploads bytes directly to the Drive API via `multipart/related`
+//! and sets `anyone/reader` so the returned `thumbnail` URL is embeddable.
+//!
+//! Why split into two phases? Browsers only allow popups (the OAuth consent
+//! window) to open inside a synchronous user-gesture handler. If the gesture
+//! expires (e.g. after `await file_picker` or `await load_gis`), the browser
+//! blocks the popup with `popup_failed_to_open`. So we MUST call
+//! `requestAccessToken` synchronously in the click handler, store the
+//! in-flight Promise, and only then open the file picker once the token
+//! has arrived.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -20,20 +28,23 @@ const HELPER_SCRIPT: &str = r#"
     const SCOPE = "https://www.googleapis.com/auth/drive.file";
     const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
     const PERMS_BASE = "https://www.googleapis.com/drive/v3/files";
+
+    let gisReady = !!(window.google && window.google.accounts && window.google.accounts.oauth2);
     let gisPromise = null;
 
-    function loadGis() {
+    function preloadGis() {
+        if (gisReady) return Promise.resolve();
         if (gisPromise) return gisPromise;
         gisPromise = new Promise(function (resolve, reject) {
             if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+                gisReady = true;
                 resolve();
                 return;
             }
             const sel = 'script[src="' + GIS_SRC + '"]';
             const existing = document.querySelector(sel);
             if (existing) {
-                if (window.google) { resolve(); return; }
-                existing.addEventListener("load", resolve);
+                existing.addEventListener("load", function () { gisReady = true; resolve(); });
                 existing.addEventListener("error", function () { reject(new Error("GIS load failed")); });
                 return;
             }
@@ -41,35 +52,39 @@ const HELPER_SCRIPT: &str = r#"
             s.src = GIS_SRC;
             s.async = true;
             s.defer = true;
-            s.onload = resolve;
+            s.onload = function () { gisReady = true; resolve(); };
             s.onerror = function () { reject(new Error("GIS script failed to load")); };
             document.head.appendChild(s);
         });
         return gisPromise;
     }
 
-    function getToken(clientId) {
-        return loadGis().then(function () {
-            return new Promise(function (resolve, reject) {
-                const client = window.google.accounts.oauth2.initTokenClient({
-                    client_id: clientId,
-                    scope: SCOPE,
-                    callback: function (resp) {
-                        if (resp && resp.access_token) resolve(resp.access_token);
-                        else reject(new Error("No access token in GIS response"));
-                    },
-                    error_callback: function (err) {
-                        reject(new Error("OAuth error: " + JSON.stringify(err)));
-                    }
-                });
-                client.requestAccessToken();
+    // Synchronously opens the OAuth popup inside the caller's user gesture.
+    // MUST be called from a synchronous gesture handler (click), NOT from an
+    // awaited async task — otherwise the browser blocks the popup.
+    function acquireToken(clientId) {
+        if (!gisReady) {
+            // Kick off load so a later retry succeeds, but reject this call.
+            preloadGis();
+            return Promise.reject(new Error("GIS not yet loaded — retry in a moment"));
+        }
+        return new Promise(function (resolve, reject) {
+            const client = window.google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: SCOPE,
+                callback: function (resp) {
+                    if (resp && resp.access_token) resolve(resp.access_token);
+                    else reject(new Error("No access token in GIS response"));
+                },
+                error_callback: function (err) {
+                    reject(new Error("OAuth error: " + JSON.stringify(err)));
+                }
             });
+            client.requestAccessToken();
         });
     }
 
-    async function uploadAndShare(clientId, bytes, mime, name, folderId) {
-        const token = await getToken(clientId);
-
+    async function uploadWithToken(token, bytes, mime, name, folderId) {
         const boundary = "gdrive_boundary_" + Math.random().toString(36).slice(2);
         const meta = { name: name };
         if (folderId) meta.parents = [folderId];
@@ -118,7 +133,11 @@ const HELPER_SCRIPT: &str = r#"
         return "https://drive.google.com/thumbnail?id=" + data.id + "&sz=w1000";
     }
 
-    window.__gdriveHelper = { uploadAndShare: uploadAndShare };
+    window.__gdriveHelper = {
+        preloadGis: preloadGis,
+        acquireToken: acquireToken,
+        uploadWithToken: uploadWithToken
+    };
 })();
 "#;
 
@@ -129,10 +148,16 @@ extern "C" {
 
     type GdriveHelper;
 
-    #[wasm_bindgen(method, js_name = "uploadAndShare")]
-    fn upload_and_share(
+    #[wasm_bindgen(method, js_name = "preloadGis")]
+    fn preload_gis(this: &GdriveHelper);
+
+    #[wasm_bindgen(method, js_name = "acquireToken")]
+    fn acquire_token(this: &GdriveHelper, client_id: &str) -> js_sys::Promise;
+
+    #[wasm_bindgen(method, js_name = "uploadWithToken")]
+    fn upload_with_token(
         this: &GdriveHelper,
-        client_id: &str,
+        token: &str,
         bytes: &js_sys::Uint8Array,
         mime: &str,
         name: &str,
@@ -171,20 +196,38 @@ fn inject_helper_once() {
     info!("Google Drive helper script injected");
 }
 
-/// Upload image bytes to Google Drive and return a public thumbnail URL.
-///
-/// Format: `https://drive.google.com/thumbnail?id={fileId}&sz=w1000`
-/// Requires `GOOGLE_OAUTH_CLIENT_ID` to be configured.
-/// Pass a folder ID as the last argument to upload into a specific Drive folder.
-pub async fn upload_image(
-    client_id: &str,
+/// Preload the Google Identity Services script so it is ready by the time the
+/// user clicks the image-upload button. Idempotent. Safe to call on app init.
+pub fn preload_gdrive() {
+    inject_helper_once();
+    GDRIVE_HELPER.with(|helper| helper.preload_gis());
+    debug!("preload_gdrive: GIS preload requested");
+}
+
+/// Start OAuth token acquisition. The GIS popup opens **synchronously** during
+/// this call, so this MUST be invoked directly inside a user-gesture handler
+/// (e.g. an `onclick` closure body) — never from inside an awaited async task.
+/// The returned Promise resolves later (after the user finishes the consent
+/// flow) with the access_token string.
+pub fn acquire_token_promise(client_id: &str) -> Result<js_sys::Promise, String> {
+    if client_id.is_empty() {
+        return Err("GOOGLE_OAUTH_CLIENT_ID not configured".to_string());
+    }
+    inject_helper_once();
+    Ok(GDRIVE_HELPER.with(|helper| helper.acquire_token(client_id)))
+}
+
+/// Upload image bytes to Google Drive using a pre-acquired OAuth token.
+/// Returns a public thumbnail URL: `https://drive.google.com/thumbnail?id=...&sz=w1000`.
+pub async fn upload_with_token(
+    token: &str,
     bytes: &[u8],
     mime: &str,
     name: &str,
     folder_id: Option<&str>,
 ) -> Result<String, String> {
-    if client_id.is_empty() {
-        return Err("GOOGLE_OAUTH_CLIENT_ID not configured".to_string());
+    if token.is_empty() {
+        return Err("OAuth token is empty".to_string());
     }
     if bytes.is_empty() {
         return Err("image bytes are empty".to_string());
@@ -195,7 +238,7 @@ pub async fn upload_image(
     let js_bytes = js_sys::Uint8Array::from(bytes);
     let folder_id_str = folder_id.unwrap_or("");
     let promise = GDRIVE_HELPER
-        .with(|helper| helper.upload_and_share(client_id, &js_bytes, mime, name, folder_id_str));
+        .with(|helper| helper.upload_with_token(token, &js_bytes, mime, name, folder_id_str));
 
     debug!(
         "awaiting Google Drive upload for {name} ({mime}, {} bytes)",

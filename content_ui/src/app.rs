@@ -120,6 +120,12 @@ pub fn App() -> Element {
 
     use_context_provider(move || content_tags_context.read().clone());
 
+    // Preload Google Identity Services so the OAuth popup is ready to open
+    // synchronously when the user clicks "Upload image". Without this, the
+    // first click would race the GIS script load and the popup would be blocked.
+    #[cfg(target_arch = "wasm32")]
+    content_sdk::services::drive::preload_gdrive();
+
     rsx! {
         // Document head elements
         document::Link { rel: "icon", href: FAVICON }

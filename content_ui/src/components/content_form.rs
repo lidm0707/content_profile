@@ -2,7 +2,9 @@ use content_sdk::ContentTagsContext;
 use content_sdk::TagContext;
 use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
 #[cfg(target_arch = "wasm32")]
-use content_sdk::services::drive::upload_image as drive_upload_image;
+use content_sdk::services::drive::{
+    acquire_token_promise, upload_with_token as drive_upload_with_token,
+};
 use content_sdk::utils::config::Config;
 #[cfg(target_arch = "wasm32")]
 use content_sdk::utils::format_image;
@@ -847,22 +849,85 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
     let config = use_context::<Memo<Config>>();
 
-    let handle_trigger_image_upload = move |_| {
-        if config.read().google_oauth_client_id.is_none() {
-            error_message.set(Some(
-                "Google Drive not configured. Set GOOGLE_OAUTH_CLIENT_ID in .env".to_string(),
-            ));
-            warn!("image upload requested but GOOGLE_OAUTH_CLIENT_ID is missing");
-            return;
-        }
-        document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
-    };
+    // Holds the OAuth token captured during the click gesture. The click
+    // handler acquires the token synchronously (so the popup can open), then
+    // stores it here for the file-selected handler to use when uploading.
+    let mut gdrive_token: Signal<Option<String>> = use_signal(|| None);
 
-    let handle_image_file_selected = move |e: Event<FormData>| {
+    let handle_trigger_image_upload = move |_| {
         let client_id = match config.read().google_oauth_client_id.clone() {
             Some(id) => id,
             None => {
-                error_message.set(Some("Google Drive not configured".to_string()));
+                error_message.set(Some(
+                    "Google Drive not configured. Set GOOGLE_OAUTH_CLIENT_ID in .env".to_string(),
+                ));
+                warn!("image upload requested but GOOGLE_OAUTH_CLIENT_ID is missing");
+                return;
+            }
+        };
+
+        is_uploading_image.set(true);
+        error_message.set(None);
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Synchronous JS call: the OAuth popup MUST open inside this click
+            // gesture, before any await. Otherwise the browser blocks it with
+            // `popup_failed_to_open`.
+            let token_promise = match acquire_token_promise(&client_id) {
+                Ok(p) => p,
+                Err(msg) => {
+                    error_message.set(Some(msg));
+                    is_uploading_image.set(false);
+                    return;
+                }
+            };
+
+            let mut gdrive_token_signal = gdrive_token;
+            let mut error_message_signal = error_message;
+            let mut is_uploading_signal = is_uploading_image;
+
+            spawn(async move {
+                // Popup already opened synchronously above. Await the token here.
+                match wasm_bindgen_futures::JsFuture::from(token_promise).await {
+                    Ok(value) => {
+                        let token = value.as_string().unwrap_or_default();
+                        if token.is_empty() {
+                            error_message_signal
+                                .set(Some("OAuth returned empty token".to_string()));
+                            is_uploading_signal.set(false);
+                            return;
+                        }
+                        gdrive_token_signal.set(Some(token));
+                        // Sticky activation is enough for a programmatic file-picker click.
+                        document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
+                    }
+                    Err(err) => {
+                        let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
+                        error!("OAuth token acquisition failed: {msg}");
+                        error_message_signal.set(Some(format!("Image upload failed: {msg}")));
+                        is_uploading_signal.set(false);
+                    }
+                }
+            });
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (client_id, gdrive_token);
+            error!("image upload is only supported on the web target");
+            is_uploading_image.set(false);
+        }
+    };
+
+    let handle_image_file_selected = move |e: Event<FormData>| {
+        let token = match gdrive_token.read().clone() {
+            Some(t) if !t.is_empty() => t,
+            _ => {
+                error_message.set(Some(
+                    "No OAuth token — click the image button first".to_string(),
+                ));
+                is_uploading_image.set(false);
                 return;
             }
         };
@@ -870,6 +935,9 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         let files = e.files();
         if files.is_empty() {
             warn!("image file selected but no files attached");
+            is_uploading_image.set(false);
+            // Clear stale token so the next click re-acquires.
+            gdrive_token.set(None);
             return;
         }
         let file_engine = files[0].clone();
@@ -877,8 +945,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         let file_name = file_engine.name();
         debug!("image file selected: {file_name}");
 
-        is_uploading_image.set(true);
-        error_message.set(None);
+        #[cfg(target_arch = "wasm32")]
+        let folder_id = config.read().google_drive_folder_id.clone();
 
         #[cfg(target_arch = "wasm32")]
         let mut body_signal = body;
@@ -886,6 +954,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         let mut error_message_signal = error_message;
         #[cfg(target_arch = "wasm32")]
         let mut is_uploading_signal = is_uploading_image;
+        #[cfg(target_arch = "wasm32")]
+        let mut gdrive_token_signal = gdrive_token;
 
         #[cfg(target_arch = "wasm32")]
         spawn(async move {
@@ -896,6 +966,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     error!("{msg}");
                     error_message_signal.set(Some(msg));
                     is_uploading_signal.set(false);
+                    gdrive_token_signal.set(None);
                     return;
                 }
             };
@@ -910,12 +981,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 })
                 .unwrap_or("image");
 
-            match drive_upload_image(
-                &client_id,
+            match drive_upload_with_token(
+                &token,
                 bytes.as_ref(),
                 mime,
                 &file_name,
-                config.read().google_drive_folder_id.as_deref(),
+                folder_id.as_deref(),
             )
             .await
             {
@@ -930,17 +1001,20 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     error_message_signal.set(Some(format!("Image upload failed: {msg}")));
                 }
             }
+            // Always clear token + upload flag after the attempt.
+            gdrive_token_signal.set(None);
             is_uploading_signal.set(false);
         });
 
         #[cfg(not(target_arch = "wasm32"))]
         {
             let _ = (
-                client_id,
+                token,
                 file_engine,
                 body,
                 error_message,
                 is_uploading_image,
+                gdrive_token,
             );
             error!("image upload is only supported on the web target");
         }
