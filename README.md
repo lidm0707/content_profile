@@ -17,6 +17,7 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 - **Modular Architecture**: Clean separation between SDK and UI layers
 - **Google Drive Image Upload**: Upload images directly from the editor to your Google Drive and embed via public URL
 - **Markdown Rendering**: GFM-aware markdown → HTML (tables, strikethrough, task lists) with code blocks that preserve indentation and a self-contained styling pipeline
+- **Markdown Editor Toolbar**: One-click formatting inserted at the cursor (bold, italic, heading, link, inline code, fenced code block, lists, blockquote, table) with Google Drive image upload and a live preview pane
 
 ## 🛠 Technology Stack
 
@@ -609,6 +610,31 @@ The main content management interface displays:
    - **Tags**: Add tags to organize your content
 4. Click "Create Content"
 
+#### Using the Markdown Editor
+
+The **Body** field is a markdown editor with a toolbar above it. Buttons insert formatting at the cursor (or append when no cursor is recorded):
+
+| Button | Inserts | Notes |
+| --- | --- | --- |
+| `B` | `**bold text**` | |
+| `I` | `*italic text*` | |
+| `H2` | `## Heading` | |
+| 🔗 | `[Link text](https://)` | |
+| 🖼️ | `![alt](drive-url)` | Uploads the picked image to Google Drive (see [Configure Google Drive](#4-configure-google-drive-image-upload)) |
+| `</>` | `` `code` `` | Inline code |
+| `Code` | Fenced block | Pads the fence onto its own line(s) and lands the caret **inside** the block with the placeholder selected — type or paste to replace it |
+| `•` / `1.` | List items | Bullet / numbered |
+| `Quote` | `> Quote text` | Blockquote |
+| `Table` | GFM table | 3×3 starter with header row |
+
+Switch the editor to **Preview** to see the rendered HTML (uses the same pipeline as the detail page).
+
+##### Code block tips
+
+- Click `Code` anywhere — the opening and closing ` ``` ` fences are placed on their own lines so the block always parses, even if your cursor was mid-line.
+- The `code` placeholder is pre-selected; start typing to replace it, or paste a snippet to drop it straight between the fences.
+- Indentation and blank lines inside the block are preserved verbatim in the rendered output.
+
 ### 4. Editing Content
 
 1. Navigate to Dashboard
@@ -947,6 +973,7 @@ For issues, questions, or contributions:
 - [x] Pagination for content lists
 - [x] Image upload to Google Drive
 - [x] Markdown rendering with indentation-preserving code blocks
+- [x] Markdown editor toolbar with cursor-aware insertion (code block lands the caret inside the fence)
 
 ### Planned Features
 

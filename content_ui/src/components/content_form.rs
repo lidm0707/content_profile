@@ -18,6 +18,8 @@ use dioxus::prelude::*;
 use tracing::{debug, error, warn};
 
 const BODY_TEXTAREA_ID: &str = "content-body-textarea";
+const FENCE_DELIM: &str = "```";
+const CODE_BLOCK_PLACEHOLDER: &str = "code";
 
 /// Insert markdown at a byte-aware cursor position, returning the new body and
 /// the byte offset where the inserted snippet ends (so we can restore the
@@ -88,31 +90,41 @@ fn utf16_offset_to_byte(s: &str, utf16_offset: usize) -> usize {
     s.len()
 }
 
-/// Move the caret to `caret` (Rust byte offset into `body`) and refocus the
-/// textarea.
+/// Move the textarea selection to `[start, end)` (Rust byte offsets into
+/// `body`) and refocus it.
 ///
-/// We must run this *after* Dioxus reconciles the controlled `value` back into
-/// the DOM, otherwise the browser snaps the caret to the end.
-fn restore_cursor_after_render(caret: usize) {
+/// Must run *after* Dioxus reconciles the controlled `value` back into the
+/// DOM, otherwise the browser snaps the caret to the end.
+fn restore_selection_after_render(start: usize, end: usize) {
     use wasm_bindgen::JsCast;
     use web_sys::HtmlTextAreaElement;
 
-    let utf16 = web_sys::window()
+    let (utf16_start, utf16_end) = web_sys::window()
         .and_then(|w| w.document())
         .and_then(|d| d.get_element_by_id(BODY_TEXTAREA_ID))
         .and_then(|el| el.dyn_into::<HtmlTextAreaElement>().ok())
         .map(|ta| {
             let value = ta.value();
-            byte_offset_to_utf16(&value, caret)
+            (
+                byte_offset_to_utf16(&value, start),
+                byte_offset_to_utf16(&value, end),
+            )
         })
-        .unwrap_or(caret);
+        .unwrap_or((start, end));
 
     let script = format!(
-        "setTimeout(() => {{ const ta = document.getElementById('{id}'); if (!ta) return; ta.focus(); ta.setSelectionRange({utf16}, {utf16}); }}, 0);",
+        "setTimeout(() => {{ const ta = document.getElementById('{id}'); if (!ta) return; ta.focus(); ta.setSelectionRange({s}, {e}); }}, 0);",
         id = BODY_TEXTAREA_ID,
-        utf16 = utf16,
+        s = utf16_start,
+        e = utf16_end,
     );
     let _ = document::eval(script.as_str());
+}
+
+/// Place the caret (collapsed selection) at `caret`. See
+/// [`restore_selection_after_render`].
+fn restore_cursor_after_render(caret: usize) {
+    restore_selection_after_render(caret, caret);
 }
 
 /// Convert a Rust byte offset into `s` to a UTF-16 code-unit offset the DOM
@@ -924,6 +936,49 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         restore_cursor_after_render(caret);
     };
 
+    // Inserts a fenced code block at the cursor and lands the caret *inside* it
+    // (selecting the placeholder so a single keystroke replaces it). The fence
+    // is padded onto its own line(s) so markdown always parses it as a block,
+    // never as inline text glued to the surrounding line.
+    let mut insert_code_block = move || {
+        let current_body = body.read().clone();
+        let pos = *cursor_pos.read();
+
+        // Splice point: stored cursor, else append at the end.
+        let (splice_start, splice_end) = match pos {
+            Some((s, e)) if s <= current_body.len() && e <= current_body.len() => (s, e),
+            _ => (current_body.len(), current_body.len()),
+        };
+
+        // Pad so the opening/closing fence each sit on their own line.
+        let need_leading_newline =
+            splice_start > 0 && !current_body[..splice_start].ends_with('\n');
+        let need_trailing_newline =
+            splice_end < current_body.len() && !current_body[splice_end..].starts_with('\n');
+
+        // format_code_block produces "```\n{placeholder}\n```". The placeholder
+        // starts right after "```\n".
+        let fence = format_code_block(CODE_BLOCK_PLACEHOLDER);
+        let open_len = FENCE_DELIM.len() + 1; // "```" + '\n'
+        let ph_start = open_len;
+        let ph_end = open_len + CODE_BLOCK_PLACEHOLDER.len();
+
+        let mut new_body = String::with_capacity(current_body.len() + fence.len() + 2);
+        new_body.push_str(&current_body[..splice_start]);
+        if need_leading_newline {
+            new_body.push('\n');
+        }
+        let insert_start = new_body.len();
+        new_body.push_str(&fence);
+        new_body.push_str(&current_body[splice_end..]);
+        if need_trailing_newline {
+            new_body.insert(insert_start + fence.len(), '\n');
+        }
+
+        *body.write() = new_body;
+        restore_selection_after_render(insert_start + ph_start, insert_start + ph_end);
+    };
+
     // Formatting handlers — insert at cursor, fall back to append.
     let handle_format_bold = move |_| {
         insert_markdown(format_bold("bold text"));
@@ -938,7 +993,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     };
 
     let handle_format_code_block = move |_| {
-        insert_markdown(format_code_block("code"));
+        insert_code_block();
     };
 
     let handle_format_heading = move |_| {
