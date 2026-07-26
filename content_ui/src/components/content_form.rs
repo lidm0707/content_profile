@@ -17,12 +17,115 @@ use content_sdk::utils::{
 use dioxus::prelude::*;
 use tracing::{debug, error, warn};
 
+const BODY_TEXTAREA_ID: &str = "content-body-textarea";
+
+/// Insert markdown at a byte-aware cursor position, returning the new body and
+/// the byte offset where the inserted snippet ends (so we can restore the
+/// caret there).
+///
+/// Falls back to appending (current behaviour) when no cursor position is
+/// available, so we never lose data.
+fn insert_at_cursor(
+    current_body: &str,
+    markdown: &str,
+    cursor: Option<(usize, usize)>,
+) -> (String, usize) {
+    let Some((start, end)) =
+        cursor.filter(|(s, e)| *s <= current_body.len() && *e <= current_body.len())
+    else {
+        let new_body = append_markdown(current_body, markdown);
+        let new_caret = new_body.len();
+        return (new_body, new_caret);
+    };
+
+    let mut new_body = String::with_capacity(current_body.len() + markdown.len() + 2);
+    new_body.push_str(&current_body[..start]);
+    new_body.push_str(markdown);
+    new_body.push_str(&current_body[end..]);
+    let new_caret = start + markdown.len();
+    (new_body, new_caret)
+}
+
 fn append_markdown(current_body: &str, markdown: &str) -> String {
     if current_body.trim().is_empty() {
         markdown.to_string()
     } else {
         format!("{}\n\n{}", current_body, markdown)
     }
+}
+
+/// Capture the textarea selection synchronously from the DOM.
+///
+/// The DOM `selectionStart`/`selectionEnd` are UTF-16 code-unit offsets, but
+/// Rust strings are indexed by bytes. We convert UTF-16 code units → byte
+/// offsets so the caller can safely slice `&str`.
+fn read_cursor_pos() -> Option<(usize, usize)> {
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlTextAreaElement;
+
+    let document = web_sys::window()?.document()?;
+    let el = document.get_element_by_id(BODY_TEXTAREA_ID)?;
+    let ta: HtmlTextAreaElement = el.dyn_into().ok()?;
+    let start = ta.selection_start().ok().flatten()? as usize;
+    let end = ta.selection_end().ok().flatten()? as usize;
+    let value = ta.value();
+    Some((
+        utf16_offset_to_byte(&value, start),
+        utf16_offset_to_byte(&value, end),
+    ))
+}
+
+/// Convert a UTF-16 code-unit offset into `s` to a Rust byte offset.
+/// Clamps to the string length so out-of-range values never panic.
+fn utf16_offset_to_byte(s: &str, utf16_offset: usize) -> usize {
+    let mut units = 0usize;
+    for (byte_idx, ch) in s.char_indices() {
+        if units >= utf16_offset {
+            return byte_idx;
+        }
+        units += ch.len_utf16();
+    }
+    s.len()
+}
+
+/// Move the caret to `caret` (Rust byte offset into `body`) and refocus the
+/// textarea.
+///
+/// We must run this *after* Dioxus reconciles the controlled `value` back into
+/// the DOM, otherwise the browser snaps the caret to the end.
+fn restore_cursor_after_render(caret: usize) {
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlTextAreaElement;
+
+    let utf16 = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id(BODY_TEXTAREA_ID))
+        .and_then(|el| el.dyn_into::<HtmlTextAreaElement>().ok())
+        .map(|ta| {
+            let value = ta.value();
+            byte_offset_to_utf16(&value, caret)
+        })
+        .unwrap_or(caret);
+
+    let script = format!(
+        "setTimeout(() => {{ const ta = document.getElementById('{id}'); if (!ta) return; ta.focus(); ta.setSelectionRange({utf16}, {utf16}); }}, 0);",
+        id = BODY_TEXTAREA_ID,
+        utf16 = utf16,
+    );
+    let _ = document::eval(script.as_str());
+}
+
+/// Convert a Rust byte offset into `s` to a UTF-16 code-unit offset the DOM
+/// API expects. Clamps to the string length.
+fn byte_offset_to_utf16(s: &str, byte_offset: usize) -> usize {
+    let mut units = 0usize;
+    for (byte_idx, ch) in s.char_indices() {
+        if byte_idx >= byte_offset {
+            return units;
+        }
+        units += ch.len_utf16();
+    }
+    units
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -73,6 +176,7 @@ fn EditModeBodyEditor(
     handle_format_ordered_list: EventHandler<MouseEvent>,
     handle_format_blockquote: EventHandler<MouseEvent>,
     handle_format_table: EventHandler<MouseEvent>,
+    cursor_pos: Signal<Option<(usize, usize)>>,
 ) -> Element {
     rsx! {
         div {
@@ -171,11 +275,25 @@ fn EditModeBodyEditor(
             }
         }
         textarea {
+            id: BODY_TEXTAREA_ID,
             value: "{body}",
             class: "mt-0 block w-full border border-gray-300 border-t-0 rounded-b-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono",
             rows: 8,
             oninput: move |e: Event<FormData>| {
                 *body.write() = e.value();
+                *cursor_pos.write() = read_cursor_pos();
+            },
+            // Capture the selection whenever the user clicks / arrows inside
+            // the textarea and whenever focus leaves it (so the next toolbar
+            // click still knows where the caret was).
+            onclick: move |_| {
+                *cursor_pos.write() = read_cursor_pos();
+            },
+            onkeyup: move |_| {
+                *cursor_pos.write() = read_cursor_pos();
+            },
+            onblur: move |_| {
+                *cursor_pos.write() = read_cursor_pos();
             },
             disabled: *is_submitting.read()
         }
@@ -662,6 +780,10 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut error_message = use_signal(|| None::<String>);
     let mut isPreviewMode = use_signal(|| false);
     let mut is_uploading_image = use_signal(|| false);
+    // Last known selection on the body textarea: `(selection_start, selection_end)`
+    // in UTF-16 code-unit offsets (matches the DOM API).
+    // `None` means "no recorded position" — we fall back to appending at the end.
+    let cursor_pos: Signal<Option<(usize, usize)>> = use_signal(|| None);
     let tag_to_remove = use_signal(|| None::<(i32, String)>);
     let show_clear_all_confirmation = use_signal(|| false);
 
@@ -792,59 +914,51 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         }
     };
 
-    // Formatting handlers - append templates to body
-    let handle_format_bold = move |_| {
+    // Inserts `markdown` into `body` at the stored cursor position (or appends
+    // when we never recorded one) and schedules a DOM caret restore.
+    let mut insert_markdown = move |markdown: String| {
         let current_body = body.read().clone();
-        let markdown = format_bold("bold text");
-        *body.write() = append_markdown(&current_body, &markdown);
+        let pos = *cursor_pos.read();
+        let (new_body, caret) = insert_at_cursor(&current_body, &markdown, pos);
+        *body.write() = new_body;
+        restore_cursor_after_render(caret);
+    };
+
+    // Formatting handlers — insert at cursor, fall back to append.
+    let handle_format_bold = move |_| {
+        insert_markdown(format_bold("bold text"));
     };
 
     let handle_format_italic = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_italic("italic text");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_italic("italic text"));
     };
 
     let handle_format_code = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_code("code");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_code("code"));
     };
 
     let handle_format_code_block = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_code_block("code");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_code_block("code"));
     };
 
     let handle_format_heading = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_heading("Heading", 2);
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_heading("Heading", 2));
     };
 
     let handle_format_link = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_link("Link text", "https://");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_link("Link text", "https://"));
     };
 
     let handle_format_unordered_list = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_unordered_list("List item");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_unordered_list("List item"));
     };
 
     let handle_format_ordered_list = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_ordered_list("List item", 1);
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_ordered_list("List item", 1));
     };
 
     let handle_format_blockquote = move |_| {
-        let current_body = body.read().clone();
-        let markdown = format_blockquote("Quote text");
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(format_blockquote("Quote text"));
     };
 
     let config = use_context::<Memo<Config>>();
@@ -853,6 +967,9 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     // handler acquires the token synchronously (so the popup can open), then
     // stores it here for the file-selected handler to use when uploading.
     let mut gdrive_token: Signal<Option<String>> = use_signal(|| None);
+    // Cursor position captured at image-button click time, so the async
+    // upload path can insert at the original caret instead of the end.
+    let mut pending_image_pos: Signal<Option<(usize, usize)>> = use_signal(|| None);
 
     let handle_trigger_image_upload = move |_| {
         let client_id = match config.read().google_oauth_client_id.clone() {
@@ -869,6 +986,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         is_uploading_image.set(true);
         error_message.set(None);
 
+        // Snapshot the caret *now*, before the textarea loses focus to the
+        // popup / file picker. We restore it after the upload completes.
+        pending_image_pos.set(read_cursor_pos());
+
+        // The rest of this handler uses `content_sdk::services::drive`, which is
+        // wasm-only (it shells out to Google Identity Services via JS).
         #[cfg(target_arch = "wasm32")]
         {
             // Synchronous JS call: the OAuth popup MUST open inside this click
@@ -915,7 +1038,6 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let _ = (client_id, gdrive_token);
-            error!("image upload is only supported on the web target");
             is_uploading_image.set(false);
         }
     };
@@ -947,7 +1069,6 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
         #[cfg(target_arch = "wasm32")]
         let folder_id = config.read().google_drive_folder_id.clone();
-
         #[cfg(target_arch = "wasm32")]
         let mut body_signal = body;
         #[cfg(target_arch = "wasm32")]
@@ -956,6 +1077,8 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         let mut is_uploading_signal = is_uploading_image;
         #[cfg(target_arch = "wasm32")]
         let mut gdrive_token_signal = gdrive_token;
+        #[cfg(target_arch = "wasm32")]
+        let mut pending_pos_signal = pending_image_pos;
 
         #[cfg(target_arch = "wasm32")]
         spawn(async move {
@@ -993,7 +1116,10 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 Ok(url) => {
                     let current_body = body_signal.read().clone();
                     let markdown = format_image(alt_text, &url);
-                    *body_signal.write() = append_markdown(&current_body, &markdown);
+                    let pos = *pending_pos_signal.read();
+                    let (new_body, caret) = insert_at_cursor(&current_body, &markdown, pos);
+                    *body_signal.write() = new_body;
+                    restore_cursor_after_render(caret);
                     debug!("image inserted: ![{alt_text}]({url})");
                 }
                 Err(msg) => {
@@ -1003,6 +1129,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             }
             // Always clear token + upload flag after the attempt.
             gdrive_token_signal.set(None);
+            pending_pos_signal.set(None);
             is_uploading_signal.set(false);
         });
 
@@ -1015,13 +1142,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 error_message,
                 is_uploading_image,
                 gdrive_token,
+                pending_image_pos,
             );
-            error!("image upload is only supported on the web target");
         }
     };
 
     let handle_format_table = move |_| {
-        let current_body = body.read().clone();
         let markdown = format_table(
             &["Header 1", "Header 2", "Header 3"],
             &[
@@ -1029,7 +1155,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 &["Cell 4", "Cell 5", "Cell 6"],
             ],
         );
-        *body.write() = append_markdown(&current_body, &markdown);
+        insert_markdown(markdown);
     };
 
     let handle_submit = move |_| {
@@ -1252,6 +1378,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     handle_format_ordered_list: handle_format_ordered_list,
                                     handle_format_blockquote: handle_format_blockquote,
                                     handle_format_table: handle_format_table,
+                                    cursor_pos,
                                 }
                             } else {
                                 PreviewModeBodyEditor {
