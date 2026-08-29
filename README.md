@@ -16,7 +16,7 @@ A modern, responsive content management system built with Rust's Dioxus framewor
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
 - **Modular Architecture**: Clean separation between SDK and UI layers
 - **Google Drive Image Upload**: Upload images directly from the editor to your Google Drive and embed via public URL
-- **Markdown Rendering**: GFM-aware markdown → HTML (tables, strikethrough, task lists) with code blocks that preserve indentation and a self-contained styling pipeline
+- **Markdown Rendering**: GFM-aware markdown → HTML (tables, strikethrough, task lists) with code blocks that preserve indentation, per-image sizing via a `#img=WxH` fragment, and a self-contained styling pipeline
 - **Markdown Editor Toolbar**: One-click formatting inserted at the cursor (bold, italic, heading, link, inline code, fenced code block, lists, blockquote, table) with Google Drive image upload and a live preview pane
 
 ## 🛠 Technology Stack
@@ -94,7 +94,7 @@ content_profile/
 │  ├─ Cargo.toml              # UI dependencies
 │  ├─ build.rs                # Build script for environment variables
 │  └─ Dioxus.toml            # Dioxus configuration
-├─ content_proxy/              # Pingora reverse proxy
+├─ nginx/                      # nginx reverse proxy config
 │  ├─ src/
 │  │  └─ main.rs             # Proxy server (routes to Supabase Cloud + UI)
 │  └─ Cargo.toml              # Proxy dependencies
@@ -109,9 +109,8 @@ content_profile/
 │  ├─ Dockerfile              # Node 20 + Playwright + Chromium
 │  └─ package.json            # Yarn-managed deps
 ├─ build.sh                    # Host build + Docker compose script
-├─ docker-compose.yml          # Docker Compose orchestration
+├─ docker/                     # Docker assets (compose, Dockerfiles, nginx config)
 ├─ Dockerfile.ui               # nginx + WASM static files
-├─ Dockerfile.proxy            # Pingora proxy image
 ├─ .dockerignore               # Docker build exclusions
 ├─ .env.example                # Environment variables template
 ├─ supabase_schema.sql         # Database schema for Supabase
@@ -212,7 +211,7 @@ Image uploads in the content editor go directly to your Google Drive and return 
 2. Application type: **Web application**
 3. Add **Authorized JavaScript origins**:
    - `http://localhost:8080` (dx serve dev server)
-   - `http://localhost:6190` (Pingora proxy)
+   - `http://localhost:6190` (nginx proxy)
    - Your production URL (e.g. `https://your-domain.com`)
 4. Click **Create** and copy the **Client ID** (format: `xxxxx.apps.googleusercontent.com`)
 
@@ -264,7 +263,7 @@ ALTER TABLE content ENABLE ROW LEVEL SECURITY;
 
 ## 🐳 Docker Compose (Quick Start)
 
-Run the entire stack with a single command. Uses **Pingora** as a reverse proxy to route API calls to Supabase Cloud and serve the WASM UI via nginx.
+Run the entire stack with a single command. Uses **nginx** as a reverse proxy to route API calls to Supabase Cloud and serve the WASM UI via nginx.
 
 ### Prerequisites
 
@@ -276,7 +275,7 @@ Run the entire stack with a single command. Uses **Pingora** as a reverse proxy 
 
 ```bash
 ./build.sh
-docker compose up
+make up
 ```
 
 Open **http://localhost:6190** in your browser.
@@ -284,7 +283,7 @@ Open **http://localhost:6190** in your browser.
 ### Architecture
 
 ```
-Browser → Pingora Proxy (:6190)
+Browser → nginx (:6190)
               ├── /rest/*, /auth/*  → Supabase Cloud (HTTPS)
               └── /*                → content_ui (nginx + WASM)
 ```
@@ -295,13 +294,13 @@ Browser → Pingora Proxy (:6190)
 |------|---------|----------|
 | 1 | `npx @tailwindcss/cli` | Build tailwind CSS |
 | 2 | `dx build --release --web` | Build WASM app |
-| 3 | `cargo build --release -p content_proxy` | Build Pingora proxy |
-| 4 | `docker compose build` | Package artifacts into images |
+| 3 | — | Proxy is now the stock `nginx:alpine` image |
+| 4 | `make build` | Package artifacts into images |
 
 ### Stop
 
 ```bash
-docker compose down
+make down
 ```
 
 ---
@@ -621,6 +620,7 @@ The **Body** field is a markdown editor with a toolbar above it. Buttons insert 
 | `H2` | `## Heading` | |
 | 🔗 | `[Link text](https://)` | |
 | 🖼️ | `![alt](drive-url)` | Uploads the picked image to Google Drive (see [Configure Google Drive](#4-configure-google-drive-image-upload)) |
+| `Img↔` | — | Opens the image-size editor for the image under the caret (see [Image sizing](#image-sizing)) |
 | `</>` | `` `code` `` | Inline code |
 | `Code` | Fenced block | Pads the fence onto its own line(s) and lands the caret **inside** the block with the placeholder selected — type or paste to replace it |
 | `•` / `1.` | List items | Bullet / numbered |
@@ -634,6 +634,21 @@ Switch the editor to **Preview** to see the rendered HTML (uses the same pipelin
 - Click `Code` anywhere — the opening and closing ` ``` ` fences are placed on their own lines so the block always parses, even if your cursor was mid-line.
 - The `code` placeholder is pre-selected; start typing to replace it, or paste a snippet to drop it straight between the fences.
 - Indentation and blank lines inside the block are preserved verbatim in the rendered output.
+
+##### Image sizing
+
+Set a display size on any image by appending a `#img=...` fragment to its URL. The renderer strips the fragment (so the image still loads from the clean URL) and emits explicit `width`/`height` inline styles.
+
+| Markdown | Result |
+| --- | --- |
+| `![logo](photo.png#img=200x100)` | `<img src="photo.png" ... style="width:200px;height:100px">` |
+| `![logo](photo.png#img=200)` | width `200px`, height follows aspect ratio |
+| `![logo](photo.png#img=x100)` | height `100px`, width follows aspect ratio |
+
+Notes:
+- The marker is `#img=` (not a query param) so it never reaches the image host.
+- A plain `![logo](photo.png)` renders responsively (`max-width: 100%`, height auto) — no size fragment needed.
+- You don't have to hand-edit URLs: click `Img↔` with the caret on an image to set width/height via a dialog (or pick **Reset to auto** to remove the size). The fragment is rewritten for you; **Preview** reflects the new size immediately.
 
 ### 4. Editing Content
 
@@ -758,7 +773,7 @@ cargo fmt --check
 
 ### Playwright Smoke Tests (`playwright_cli/`)
 
-Dockerised Playwright (Chromium) tests that verify the Dioxus WASM app renders correctly, including authenticated pages. The test container joins the app's Docker network and reaches the proxy at `http://content_proxy:6190`.
+Dockerised Playwright (Chromium) tests that verify the Dioxus WASM app renders correctly, including authenticated pages. The test container joins the app's Docker network and reaches the proxy at `http://nginx:6190`.
 
 #### Prerequisites
 
@@ -766,27 +781,27 @@ The app must be running first:
 
 ```bash
 # from the project root
-docker compose up -d
-docker compose ps -a   # both content_proxy + content_ui must be Up
+make up
+make ps   # both nginx + content_ui must be Up
 ```
 
 #### Run the tests
 
 ```bash
 cd playwright_cli
-docker compose -f docker-compose.test.yml run --rm playwright
+make test
 ```
 
 Rebuild the image after editing tests or fixtures:
 
 ```bash
-docker compose -f docker-compose.test.yml build
+make test  # (or rebuild the test image: docker compose -f playwright_cli/docker-compose.test.yml build)
 ```
 
 Point at a different URL (e.g. when running the app on localhost):
 
 ```bash
-APP_URL=http://localhost:6190 docker compose -f docker-compose.test.yml run --rm playwright
+APP_URL=http://localhost:6190 make test
 ```
 
 #### Testing authenticated pages
@@ -974,6 +989,7 @@ For issues, questions, or contributions:
 - [x] Image upload to Google Drive
 - [x] Markdown rendering with indentation-preserving code blocks
 - [x] Markdown editor toolbar with cursor-aware insertion (code block lands the caret inside the fence)
+- [x] Per-image sizing in rendered markdown (`#img=WxH` URL fragment)
 
 ### Planned Features
 

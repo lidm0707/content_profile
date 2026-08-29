@@ -181,6 +181,9 @@ impl ContentService {
                 }
 
                 let total_filtered = filtered.len() as u32;
+                // Mirror the remote `created_at.desc` ordering so both modes
+                // page through the same sequence.
+                filtered.sort_by_key(|c| std::cmp::Reverse(c.created_at));
                 let start = offset as usize;
                 let end = (offset + page_size) as usize;
 

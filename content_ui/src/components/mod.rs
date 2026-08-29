@@ -1,6 +1,7 @@
 pub mod content_detail;
 pub mod content_form;
 pub mod content_table;
+pub mod editor;
 pub mod main_layout;
 pub mod navbar;
 pub mod pagination;

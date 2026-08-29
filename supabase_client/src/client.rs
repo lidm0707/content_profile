@@ -12,6 +12,10 @@ const RETURN_REPRESENTATION: &str = "return=representation";
 const COUNT_EXACT: &str = "count=exact";
 const BEARER_PREFIX: &str = "Bearer ";
 const APPLICATION_JSON: &str = "application/json";
+/// PostgREST query param + default sort: newest first. Without it, offset/
+/// limit pages come back in unspecified row order.
+const ORDER_PARAM: &str = "order";
+const DEFAULT_ORDER: &str = "created_at.desc";
 
 fn build_url(
     config: &ClientConfig,
@@ -241,6 +245,7 @@ pub async fn get_paginated<T: DeserializeOwned>(
 
     params.push(("offset", offset.to_string()));
     params.push(("limit", limit.to_string()));
+    params.push((ORDER_PARAM, DEFAULT_ORDER.to_string()));
 
     let params_ref: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
@@ -277,6 +282,7 @@ pub async fn get_paginated_with_count<T: DeserializeOwned>(
 
     params.push(("offset", offset.to_string()));
     params.push(("limit", limit.to_string()));
+    params.push((ORDER_PARAM, DEFAULT_ORDER.to_string()));
 
     let params_ref: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
 

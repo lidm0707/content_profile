@@ -1,3 +1,13 @@
+use crate::components::editor::cursor::{
+    CODE_BLOCK_PLACEHOLDER, FENCE_DELIM, ImageTarget, LINK_PLACEHOLDER, find_first_image,
+    find_image_under_cursor, insert_at_cursor, read_cursor_pos, restore_cursor_after_render,
+    restore_selection_after_render,
+};
+use crate::components::editor::image_size_modal::ImageSizeModal;
+use crate::components::editor::tags_ui::{
+    ClearAllTagsConfirmationModal, RemoveTagConfirmationModal, TagsField,
+};
+use crate::components::editor::toolbar::{EditModeBodyEditor, PreviewModeBodyEditor};
 use content_sdk::ContentTagsContext;
 use content_sdk::TagContext;
 use content_sdk::models::{Content, ContentRequest, STATUS_DRAFT, STATUS_PUBLISHED, Tag};
@@ -10,135 +20,13 @@ use content_sdk::utils::config::Config;
 use content_sdk::utils::format_image;
 use content_sdk::utils::markdown::update_tags_in_frontmatter;
 use content_sdk::utils::{
-    MARKDOWN_CONTAINER_CLASS, format_blockquote, format_bold, format_code, format_code_block,
-    format_heading, format_italic, format_link, format_ordered_list, format_table,
-    format_unordered_list, render_markdown_to_html,
+    format_blockquote, format_bold, format_code, format_code_block, format_heading, format_italic,
+    format_link, format_ordered_list, format_table, format_unordered_list,
 };
 use dioxus::prelude::*;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
-const BODY_TEXTAREA_ID: &str = "content-body-textarea";
-const FENCE_DELIM: &str = "```";
-const CODE_BLOCK_PLACEHOLDER: &str = "code";
-
-/// Insert markdown at a byte-aware cursor position, returning the new body and
-/// the byte offset where the inserted snippet ends (so we can restore the
-/// caret there).
-///
-/// Falls back to appending (current behaviour) when no cursor position is
-/// available, so we never lose data.
-fn insert_at_cursor(
-    current_body: &str,
-    markdown: &str,
-    cursor: Option<(usize, usize)>,
-) -> (String, usize) {
-    let Some((start, end)) =
-        cursor.filter(|(s, e)| *s <= current_body.len() && *e <= current_body.len())
-    else {
-        let new_body = append_markdown(current_body, markdown);
-        let new_caret = new_body.len();
-        return (new_body, new_caret);
-    };
-
-    let mut new_body = String::with_capacity(current_body.len() + markdown.len() + 2);
-    new_body.push_str(&current_body[..start]);
-    new_body.push_str(markdown);
-    new_body.push_str(&current_body[end..]);
-    let new_caret = start + markdown.len();
-    (new_body, new_caret)
-}
-
-fn append_markdown(current_body: &str, markdown: &str) -> String {
-    if current_body.trim().is_empty() {
-        markdown.to_string()
-    } else {
-        format!("{}\n\n{}", current_body, markdown)
-    }
-}
-
-/// Capture the textarea selection synchronously from the DOM.
-///
-/// The DOM `selectionStart`/`selectionEnd` are UTF-16 code-unit offsets, but
-/// Rust strings are indexed by bytes. We convert UTF-16 code units → byte
-/// offsets so the caller can safely slice `&str`.
-fn read_cursor_pos() -> Option<(usize, usize)> {
-    use wasm_bindgen::JsCast;
-    use web_sys::HtmlTextAreaElement;
-
-    let document = web_sys::window()?.document()?;
-    let el = document.get_element_by_id(BODY_TEXTAREA_ID)?;
-    let ta: HtmlTextAreaElement = el.dyn_into().ok()?;
-    let start = ta.selection_start().ok().flatten()? as usize;
-    let end = ta.selection_end().ok().flatten()? as usize;
-    let value = ta.value();
-    Some((
-        utf16_offset_to_byte(&value, start),
-        utf16_offset_to_byte(&value, end),
-    ))
-}
-
-/// Convert a UTF-16 code-unit offset into `s` to a Rust byte offset.
-/// Clamps to the string length so out-of-range values never panic.
-fn utf16_offset_to_byte(s: &str, utf16_offset: usize) -> usize {
-    let mut units = 0usize;
-    for (byte_idx, ch) in s.char_indices() {
-        if units >= utf16_offset {
-            return byte_idx;
-        }
-        units += ch.len_utf16();
-    }
-    s.len()
-}
-
-/// Move the textarea selection to `[start, end)` (Rust byte offsets into
-/// `body`) and refocus it.
-///
-/// Must run *after* Dioxus reconciles the controlled `value` back into the
-/// DOM, otherwise the browser snaps the caret to the end.
-fn restore_selection_after_render(start: usize, end: usize) {
-    use wasm_bindgen::JsCast;
-    use web_sys::HtmlTextAreaElement;
-
-    let (utf16_start, utf16_end) = web_sys::window()
-        .and_then(|w| w.document())
-        .and_then(|d| d.get_element_by_id(BODY_TEXTAREA_ID))
-        .and_then(|el| el.dyn_into::<HtmlTextAreaElement>().ok())
-        .map(|ta| {
-            let value = ta.value();
-            (
-                byte_offset_to_utf16(&value, start),
-                byte_offset_to_utf16(&value, end),
-            )
-        })
-        .unwrap_or((start, end));
-
-    let script = format!(
-        "setTimeout(() => {{ const ta = document.getElementById('{id}'); if (!ta) return; ta.focus(); ta.setSelectionRange({s}, {e}); }}, 0);",
-        id = BODY_TEXTAREA_ID,
-        s = utf16_start,
-        e = utf16_end,
-    );
-    let _ = document::eval(script.as_str());
-}
-
-/// Place the caret (collapsed selection) at `caret`. See
-/// [`restore_selection_after_render`].
-fn restore_cursor_after_render(caret: usize) {
-    restore_selection_after_render(caret, caret);
-}
-
-/// Convert a Rust byte offset into `s` to a UTF-16 code-unit offset the DOM
-/// API expects. Clamps to the string length.
-fn byte_offset_to_utf16(s: &str, byte_offset: usize) -> usize {
-    let mut units = 0usize;
-    for (byte_idx, ch) in s.char_indices() {
-        if byte_idx >= byte_offset {
-            return units;
-        }
-        units += ch.len_utf16();
-    }
-    units
-}
+use crate::ui::{Button, ButtonVariant, SelectField, TextField};
 
 #[cfg(target_arch = "wasm32")]
 fn guess_mime_from_name(name: &str) -> &'static str {
@@ -169,579 +57,6 @@ pub struct ContentFormProps {
     pub on_submit: EventHandler<(ContentRequest, Vec<i32>)>,
     /// Callback when form is cancelled
     pub on_cancel: EventHandler<()>,
-}
-
-/// Component for edit mode with toolbar and textarea
-#[component]
-fn EditModeBodyEditor(
-    body: Signal<String>,
-    is_submitting: Signal<bool>,
-    is_uploading_image: Signal<bool>,
-    handle_format_bold: EventHandler<MouseEvent>,
-    handle_format_italic: EventHandler<MouseEvent>,
-    handle_format_heading: EventHandler<MouseEvent>,
-    handle_format_link: EventHandler<MouseEvent>,
-    on_upload_image: EventHandler<()>,
-    handle_format_code: EventHandler<MouseEvent>,
-    handle_format_code_block: EventHandler<MouseEvent>,
-    handle_format_unordered_list: EventHandler<MouseEvent>,
-    handle_format_ordered_list: EventHandler<MouseEvent>,
-    handle_format_blockquote: EventHandler<MouseEvent>,
-    handle_format_table: EventHandler<MouseEvent>,
-    cursor_pos: Signal<Option<(usize, usize)>>,
-) -> Element {
-    rsx! {
-        div {
-            class: "mb-2 border border-gray-300 rounded-t-md bg-gray-50 p-2 flex flex-wrap gap-1",
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_bold,
-                disabled: *is_submitting.read(),
-                title: "Bold",
-                "B"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_italic,
-                disabled: *is_submitting.read(),
-                title: "Italic",
-                "I"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_heading,
-                disabled: *is_submitting.read(),
-                title: "Heading",
-                "H2"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_link,
-                disabled: *is_submitting.read(),
-                title: "Link",
-                "🔗"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: move |_| on_upload_image.call(()),
-                disabled: *is_submitting.read() || *is_uploading_image.read(),
-                title: if *is_uploading_image.read() { "Uploading..." } else { "Upload image to Google Drive" },
-                if *is_uploading_image.read() {
-                    { "⏳" }
-                } else {
-                    { "🖼️" }
-                }
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_code,
-                disabled: *is_submitting.read(),
-                title: "Inline Code",
-                "</>"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_code_block,
-                disabled: *is_submitting.read(),
-                title: "Code Block",
-                "Code"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_unordered_list,
-                disabled: *is_submitting.read(),
-                title: "Bullet List",
-                "•"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_ordered_list,
-                disabled: *is_submitting.read(),
-                title: "Numbered List",
-                "1."
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_blockquote,
-                disabled: *is_submitting.read(),
-                title: "Blockquote",
-                "Quote"
-            }
-            button {
-                r#type: "button",
-                class: "px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50",
-                onclick: handle_format_table,
-                disabled: *is_submitting.read(),
-                title: "Table",
-                "Table"
-            }
-        }
-        textarea {
-            id: BODY_TEXTAREA_ID,
-            value: "{body}",
-            class: "mt-0 block w-full border border-gray-300 border-t-0 rounded-b-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono",
-            rows: 8,
-            oninput: move |e: Event<FormData>| {
-                *body.write() = e.value();
-                *cursor_pos.write() = read_cursor_pos();
-            },
-            // Capture the selection whenever the user clicks / arrows inside
-            // the textarea and whenever focus leaves it (so the next toolbar
-            // click still knows where the caret was).
-            onclick: move |_| {
-                *cursor_pos.write() = read_cursor_pos();
-            },
-            onkeyup: move |_| {
-                *cursor_pos.write() = read_cursor_pos();
-            },
-            onblur: move |_| {
-                *cursor_pos.write() = read_cursor_pos();
-            },
-            disabled: *is_submitting.read()
-        }
-    }
-}
-
-/// Component for preview mode showing rendered markdown
-#[component]
-fn PreviewModeBodyEditor(body: Signal<String>) -> Element {
-    rsx! {
-        div {
-            class: "mt-0 block w-full border border-gray-300 rounded-md shadow-sm py-3 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm min-h-[200px] bg-gray-50",
-            if body.read().trim().is_empty() {
-                p {
-                    class: "text-gray-400 italic",
-                    "No content to preview"
-                }
-
-            } else {
-                div {
-                        class: "{MARKDOWN_CONTAINER_CLASS}",
-                        dangerous_inner_html: render_markdown_to_html(&body.read()),
-                    }
-            }
-        }
-    }
-}
-
-/// Tags field component for managing content tags
-/// Individual tag badge component
-#[component]
-fn TagBadge(tag_id: i32, tag: Tag, tag_to_remove: Signal<Option<(i32, String)>>) -> Element {
-    let is_marked_for_removal = tag_to_remove().map(|(id, _)| id == tag_id).unwrap_or(false);
-    debug!(
-        "TagBadge render: id={}, name={}, is_marked_for_removal={}",
-        tag_id, tag.name, is_marked_for_removal
-    );
-
-    rsx! {
-        div {
-            class: if is_marked_for_removal {
-                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors duration-150 group"
-            } else {
-                "inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors duration-150 group"
-            },
-
-            span {
-                class: "mr-1",
-                "{tag.name}"
-            }
-            button {
-                r#type: "button",
-                class: "ml-1 flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-150 cursor-pointer",
-                onclick: move |_| {
-                    debug!("Tag remove clicked: id={}, name={}", tag_id, tag.name);
-                    tag_to_remove.set(Some((tag_id, tag.name.clone())));
-                },
-                title: "Remove tag",
-
-                svg {
-                    class: "w-3 h-3",
-                    fill: "none",
-                    view_box: "0 0 24 24",
-                    stroke: "currentColor",
-
-                    path {
-                        stroke_linecap: "round",
-                        stroke_linejoin: "round",
-                        "stroke-width": 2,
-                        d: "M6 18L18 6M6 6l12 12"
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Tags field component for managing content tags
-#[component]
-fn TagsField(
-    selected_tag_ids: Signal<Vec<i32>>,
-    is_submitting: Signal<bool>,
-    tag_to_remove: Signal<Option<(i32, String)>>,
-    show_clear_all_confirmation: Signal<bool>,
-    tags_loading: ReadSignal<bool>,
-    tag_badges: ReadSignal<Vec<(i32, Tag)>>,
-    available_tags: ReadSignal<Vec<Tag>>,
-    show_tag_selector: Signal<bool>,
-    available_tags_to_show: ReadSignal<Vec<Tag>>,
-) -> Element {
-    rsx! {
-        div {
-            div {
-                "Tags"
-            }
-
-            div {
-                class: "flex flex-wrap gap-2 mb-3 relative z-10",
-
-                if *tags_loading.read() {
-                    span {
-                        class: "text-sm text-gray-500",
-                        "Loading tags..."
-                    }
-                } else if tag_badges.read().is_empty() {
-                    span {
-                        class: "text-sm text-gray-500",
-                        "No tags selected"
-                    }
-                } else {
-                    for (tag_id, tag) in tag_badges.read().iter().cloned() {
-                        TagBadge {
-                            tag_id,
-                            tag,
-                            tag_to_remove,
-                        }
-                    }
-
-                    if !tag_badges.read().is_empty() {
-                        button {
-                            r#type: "button",
-                            class: "inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors duration-150",
-                            onclick: move |_| {
-                                show_clear_all_confirmation.set(true);
-                            },
-                            disabled: false,
-                            //*is_submitting.read()
-                            svg {
-                                class: "w-4 h-4 mr-1",
-                                fill: "none",
-                                view_box: "0 0 24 24",
-                                stroke: "currentColor",
-
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    "stroke-width": 2,
-                                    d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                }
-                            }
-                            "{show_clear_all_confirmation()}"
-                            "Clear All"
-                        }
-                    }
-                }
-            }
-
-            button {
-                r#type: "button",
-                class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                onclick: move |_| {
-                    *show_tag_selector.write() = !show_tag_selector();
-                },
-                disabled: *is_submitting.read() || available_tags.read().is_empty(),
-
-                svg {
-                    class: "-ml-0.5 mr-2 h-4 w-4 text-gray-500",
-                    fill: "none",
-                    view_box: "0 0 24 24",
-                    stroke: "currentColor",
-
-                    path {
-                        stroke_linecap: "round",
-                        stroke_linejoin: "round",
-                        "stroke-width": 2,
-                        d: "M12 6v6m0 0v6m0-6h6m-6 0H6"
-                    }
-                }
-
-                "Add Tag"
-            }
-
-            if *show_tag_selector.read() {
-                div {
-                    class: "mt-3 p-3 border border-gray-200 rounded-md bg-gray-50",
-
-                    div {
-                        class: "max-h-48 overflow-y-auto space-y-1",
-                        for tag in available_tags_to_show().iter().cloned() {
-                            button {
-                                r#type: "button",
-                                class: "w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                                onclick: move |_| {
-                                    let mut ids = selected_tag_ids.write();
-                                    ids.push(tag.id.unwrap());
-                                    *show_tag_selector.write() = false;
-                                },
-                                disabled: *is_submitting.read(),
-                                "{tag.name}"
-                            }
-                        }
-                    }
-
-                    button {
-                        r#type: "button",
-                        class: "mt-2 text-sm text-gray-500 hover:text-gray-700",
-                        onclick: move |_| {
-                            *show_tag_selector.write() = false;
-                        },
-
-                        "Cancel"
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Confirmation modal for removing a single tag
-#[component]
-fn RemoveTagConfirmationModal(
-    tag_id: i32,
-    tag_name: String,
-    tag_to_remove: Signal<Option<(i32, String)>>,
-    selected_tag_ids: Signal<Vec<i32>>,
-    is_submitting: ReadSignal<bool>,
-    content_id: Option<i32>,
-    content_tags_context: ContentTagsContext,
-) -> Element {
-    debug!(
-        "RemoveTagConfirmationModal rendered - tag_id: {}, tag_name: {}, content_id: {:?}",
-        tag_id, tag_name, content_id
-    );
-    let mut is_removing = use_signal(|| false);
-    rsx! {
-    div {
-        class: "fixed inset-0 z-50 flex items-center justify-center overflow-y-auto",
-        div {
-            class: "fixed inset-0 bg-gray-500/30 transition-opacity z-40",
-            onclick: move |_| {
-                tag_to_remove.set(None);
-            }
-        }
-
-        div {
-            class: "relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all max-w-lg w-full mx-4 z-50",
-
-            div {
-                class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
-
-                div {
-                    class: "sm:flex sm:items-start",
-
-                    div {
-                        class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
-
-                        svg {
-                            class: "h-6 w-6 text-red-600",
-                            fill: "none",
-                            view_box: "0 0 24 24",
-                            stroke: "currentColor",
-
-                            path {
-                                stroke_linecap: "round",
-                                stroke_linejoin: "round",
-                                stroke_width: 2,
-                                d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            }
-                        }
-                }
-
-                div {
-                        class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
-
-                        h3 {
-                            class: "text-lg leading-6 font-medium text-gray-900",
-                            "Remove Tag"
-                        }
-
-                        div {
-                            class: "mt-2",
-
-                            p {
-                                class: "text-sm text-gray-500",
-                                "Are you sure you want to remove the tag \"{tag_name}\"? This action can be undone by adding the tag back."
-                            }
-                        }
-                    }
-                }
-            }
-
-                div {
-                    class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
-
-                    button {
-                        r#type: "button",
-                        class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm",
-                        onclick: move |_| {
-                            is_removing.set(true);
-                            let mut context_for_spawn = content_tags_context.clone();
-                            let tag_id_for_spawn = tag_id;
-                            let mut tag_to_remove_for_spawn = tag_to_remove;
-                            let mut is_removing_for_spawn = is_removing;
-
-                            spawn(async move {
-                                if let Some(content_id) = content_id
-                                    && let Err(err) = context_for_spawn.remove_tag_from_content(content_id, tag_id_for_spawn).await
-                                {
-                                    error!("Failed to remove tag from content: {}", err);
-                                    is_removing_for_spawn.set(false);
-                                    return;
-                                }
-
-                                tag_to_remove_for_spawn.set(None);
-                                is_removing_for_spawn.set(false);
-                            });
-
-                            let mut ids = selected_tag_ids.write();
-                            ids.retain(|id| *id != tag_id);
-                        },
-                        disabled: *is_removing.read(),
-
-                        if *is_removing.read() {
-                            "Removing..."
-                        } else {
-                            "Remove"
-                        }
-                    }
-
-                    button {
-                        r#type: "button",
-                        class: "mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm",
-                        onclick: move |_| {
-                            tag_to_remove.set(None);
-                        },
-
-                        "Cancel"
-                    }
-                }
-            }
-        }
-        }
-}
-
-/// Confirmation modal for clearing all tags
-#[component]
-fn ClearAllTagsConfirmationModal(
-    show_clear_all_confirmation: Signal<bool>,
-    selected_tag_ids: Signal<Vec<i32>>,
-    tag_badges: ReadSignal<Vec<(i32, Tag)>>,
-    is_submitting: ReadSignal<bool>,
-) -> Element {
-    rsx! {
-        div {
-            class: "fixed inset-0 z-50 overflow-y-auto",
-            div {
-                class: "flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0",
-
-                div {
-                    class: "fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40",
-                    onclick: move |_| {
-                        show_clear_all_confirmation.set(false);
-                    }
-                }
-
-                span {
-                    class: "hidden sm:inline-block sm:align-middle sm:h-screen",
-                    " "
-                }
-
-                div {
-                    class: "inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full z-50",
-
-                    div {
-                        class: "bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4",
-
-                        div {
-                            class: "sm:flex sm:items-start",
-
-                            div {
-                                class: "mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10",
-
-                                svg {
-                                    class: "h-6 w-6 text-red-600",
-                                    fill: "none",
-                                    view_box: "0 0 24 24",
-                                    stroke: "currentColor",
-
-                                    path {
-                                        stroke_linecap: "round",
-                                        stroke_linejoin: "round",
-                                        stroke_width: 2,
-                                        d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                    }
-                                }
-                            }
-
-                            div {
-                                class: "mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left",
-
-                                h3 {
-                                    class: "text-lg leading-6 font-medium text-gray-900",
-                                    {"Clear All Tags"}
-                                }
-
-                                div {
-                                    class: "mt-2",
-
-                                    p {
-                                        class: "text-sm text-gray-500",
-                                        {"Are you sure you want to remove all ".to_string() + &tag_badges.read().len().to_string() + " tag(s)? This action can be undone by adding tags back."}
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    div {
-                        class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
-
-                        button {
-                            r#type: "button",
-                            class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm",
-                            onclick: move |_| {
-                                selected_tag_ids.set(Vec::new());
-                                show_clear_all_confirmation.set(false);
-                            },
-                            disabled: *is_submitting.read(),
-
-                            "Clear All"
-                        }
-
-                        button {
-                            r#type: "button",
-                            class: "mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm",
-                            onclick: move |_| {
-                                show_clear_all_confirmation.set(false);
-                            },
-
-                            "Cancel"
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Content form component for creating and editing content
@@ -798,6 +113,11 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let cursor_pos: Signal<Option<(usize, usize)>> = use_signal(|| None);
     let tag_to_remove = use_signal(|| None::<(i32, String)>);
     let show_clear_all_confirmation = use_signal(|| false);
+    // Image-size editor state.
+    let mut image_size_open = use_signal(|| false);
+    let mut image_size_width = use_signal(String::new);
+    let mut image_size_height = use_signal(String::new);
+    let mut image_size_target = use_signal(|| None::<ImageTarget>);
 
     // Fetch available_tags using resource
     let available_tags_resource = use_resource(move || {
@@ -918,8 +238,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     });
 
     // Auto-generate slug from title
-    let handle_title_change = move |e: Event<FormData>| {
-        let new_title = e.value();
+    let mut handle_title_change_value = move |new_title: String| {
         *title.write() = new_title.clone();
         if slug.read().is_empty() {
             slug.write().clone_from(&Content::generate_slug(&new_title));
@@ -1001,7 +320,15 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     };
 
     let handle_format_link = move |_| {
-        insert_markdown(format_link("Link text", "https://"));
+        let md = format_link(LINK_PLACEHOLDER, "https://");
+        let current_body = body.read().clone();
+        let pos = *cursor_pos.read();
+        let (new_body, caret) = insert_at_cursor(&current_body, &md, pos);
+        *body.write() = new_body;
+        // Select the placeholder label so typing replaces it; the start sits
+        // just past the opening `[`.
+        let label_start = caret - md.len() + 1;
+        restore_selection_after_render(label_start, label_start + LINK_PLACEHOLDER.len());
     };
 
     let handle_format_unordered_list = move |_| {
@@ -1014,6 +341,97 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
 
     let handle_format_blockquote = move |_| {
         insert_markdown(format_blockquote("Quote text"));
+    };
+
+    // Image-size editor.
+    //
+    // Open: locate the image under the caret (falling back to the first
+    // image in the body) and pre-fill the modal with its current size. If
+    // the body has no images at all, surface an error instead.
+    let handle_open_image_size = move |_| {
+        let current_body = body.read().clone();
+        let caret = (*cursor_pos.read())
+            .map(|(s, _)| s)
+            .unwrap_or(current_body.len());
+        let found = find_image_under_cursor(&current_body, caret)
+            .or_else(|| find_first_image(&current_body));
+        match found {
+            Some(target) => {
+                image_size_width.set(target.width.map(|w| w.to_string()).unwrap_or_default());
+                image_size_height.set(target.height.map(|h| h.to_string()).unwrap_or_default());
+                image_size_target.set(Some(target));
+                image_size_open.set(true);
+            }
+            None => {
+                error_message.set(Some(
+                    "Place the cursor inside an image (e.g. ![..](..)) first".to_string(),
+                ));
+            }
+        }
+    };
+
+    // Parse a numeric text field into Option<u32>. Empty → None; invalid → None.
+    let parse_size_field = move |s: &str| -> Option<u32> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            trimmed.parse::<u32>().ok()
+        }
+    };
+
+    // Apply the entered size to the targeted image: rewrite the `![alt](url)`
+    // span with a fresh `#img=...` fragment and restore the caret just past it.
+    let handle_apply_image_size = move |_| {
+        let Some(target) = image_size_target.read().clone() else {
+            image_size_open.set(false);
+            return;
+        };
+        let width = parse_size_field(&image_size_width.read());
+        let height = parse_size_field(&image_size_height.read());
+
+        let current_body = body.read().clone();
+        let new_md = target.to_markdown(width, height);
+        // Bounds may have shifted if the body changed while the modal was
+        // open; clamp to be safe.
+        let start = target.start.min(current_body.len());
+        let end = target.end.min(current_body.len()).max(start);
+        let mut new_body = String::with_capacity(current_body.len() + new_md.len());
+        new_body.push_str(&current_body[..start]);
+        let caret = start + new_md.len();
+        new_body.push_str(&new_md);
+        new_body.push_str(&current_body[end..]);
+        *body.write() = new_body;
+
+        image_size_open.set(false);
+        restore_cursor_after_render(caret);
+    };
+
+    // Strip the size fragment so the image renders responsively again.
+    let handle_remove_image_size = move |_| {
+        let Some(target) = image_size_target.read().clone() else {
+            image_size_open.set(false);
+            return;
+        };
+        let current_body = body.read().clone();
+        let new_md = target.to_markdown(None, None);
+        let start = target.start.min(current_body.len());
+        let end = target.end.min(current_body.len()).max(start);
+        let mut new_body = String::with_capacity(current_body.len() + new_md.len());
+        new_body.push_str(&current_body[..start]);
+        let caret = start + new_md.len();
+        new_body.push_str(&new_md);
+        new_body.push_str(&current_body[end..]);
+        *body.write() = new_body;
+
+        image_size_open.set(false);
+        image_size_width.set(String::new());
+        image_size_height.set(String::new());
+        restore_cursor_after_render(caret);
+    };
+
+    let handle_cancel_image_size = move |_| {
+        image_size_open.set(false);
     };
 
     let config = use_context::<Memo<Config>>();
@@ -1313,106 +731,63 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                     },
 
                     div {
-                        class: "space-y-6",
+                        class: "grid grid-cols-1 lg:grid-cols-3 gap-6",
 
-                        // Title field
+                        // LEFT — the content editor takes the main column and
+                        // stretches to (nearly) the full screen height.
                         div {
-                            label {
-                                class: "block text-sm font-medium text-gray-700",
-                                "Title"
-                            }
-                            input {
-                                r#type: "text",
-                                value: "{title}",
-                                class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                                oninput: handle_title_change,
-                                disabled: *is_submitting.read()
-                            }
-                        }
+                            class: "lg:col-span-2 flex flex-col",
 
-                        // Slug field
-                        div {
-                            label {
-                                class: "block text-sm font-medium text-gray-700",
-                                "Slug"
-                            }
-                            input {
-                                r#type: "text",
-                                value: "{slug}",
-                                class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                                oninput: move |e: Event<FormData>| {
-                                    *slug.write() = e.value();
-                                },
-                                disabled: *is_submitting.read()
-                            }
-                            p {
-                                class: "mt-1 text-xs text-gray-500",
-                                "URL-friendly version of the title (auto-generated from title if empty)"
-                            }
-                        }
-
-                        // Status field
-                        div {
-                            label {
-                                class: "block text-sm font-medium text-gray-700",
-                                "Status"
-                            }
-                            select {
-                                value: "{status}",
-                                class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
-                                onchange: move |e: Event<FormData>| {
-                                    *status.write() = e.value();
-                                },
-                                disabled: *is_submitting.read(),
-
-                                option {
-                                    value: STATUS_DRAFT,
-                                    "Draft"
-                                }
-                                option {
-                                    value: STATUS_PUBLISHED,
-                                    "Published"
-                                }
-                            }
-                        }
-
-                        // Body field
-                        div {
-                            label {
-                                class: "block text-sm font-medium text-gray-700",
-                                "Content"
-                            }
-
-                            // Preview/Edit toggle
                             div {
-                                class: "mb-2 flex items-center space-x-2",
-
-                                button {
-                                    r#type: "button",
-                                    class: if *isPreviewMode.read() {
-                                        "px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                                    } else {
-                                        "px-3 py-1.5 text-sm border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                                    },
-                                    onclick: move |_| {
-                                        isPreviewMode.set(false);
-                                    },
-                                    disabled: *is_submitting.read(),
-                                    "Edit"
+                                class: "mb-2 flex items-center justify-between",
+                                label {
+                                    class: "block text-sm font-medium text-gray-700",
+                                    "Content"
                                 }
 
-                                button {
-                                    r#type: "button",
-                                    class: if *isPreviewMode.read() {
-                                        "px-3 py-1.5 text-sm border border-indigo-500 bg-indigo-50 text-indigo-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                                // Preview/Edit toggle
+                                div {
+                                    class: "flex items-center space-x-2",
+
+                                    if *isPreviewMode.read() {
+                                        Button {
+                                            variant: ButtonVariant::Secondary,
+                                            disabled: *is_submitting.read(),
+                                            onclick: move |_| {
+                                                isPreviewMode.set(false);
+                                            },
+                                            "Edit"
+                                        }
                                     } else {
-                                        "px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                                    },
-                                    onclick: move |_| {
-                                        isPreviewMode.set(true);
-                                    },
-                                    disabled: *is_submitting.read(),
-                                    "Preview"
+                                        Button {
+                                            variant: ButtonVariant::Ghost,
+                                            disabled: *is_submitting.read(),
+                                            onclick: move |_| {
+                                                isPreviewMode.set(false);
+                                            },
+                                            "Edit"
+                                        }
+                                    }
+
+                                    if *isPreviewMode.read() {
+                                        Button {
+                                            variant: ButtonVariant::Ghost,
+                                            disabled: *is_submitting.read(),
+                                            onclick: move |_| {
+                                                isPreviewMode.set(true);
+                                            },
+                                            "Preview"
+                                        }
+                                    } else {
+                                        Button {
+                                            variant: ButtonVariant::Secondary,
+                                            disabled: *is_submitting.read(),
+                                            onclick: move |_| {
+                                                isPreviewMode.set(true);
+                                            },
+                                            "Preview"
+                                        }
+                                    }
                                 }
                             }
 
@@ -1427,6 +802,7 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                                     handle_format_heading: handle_format_heading,
                                     handle_format_link: handle_format_link,
                                     on_upload_image: handle_trigger_image_upload,
+                                    on_edit_image_size: handle_open_image_size,
                                     handle_format_code: handle_format_code,
                                     handle_format_code_block: handle_format_code_block,
                                     handle_format_unordered_list: handle_format_unordered_list,
@@ -1442,46 +818,82 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                             }
                         }
 
-                        TagsField {
-                            selected_tag_ids,
-                            is_submitting: is_submitting,
-                            tag_to_remove,
-                            show_clear_all_confirmation,
-                            tags_loading,
-                            tag_badges,
-                            available_tags,
-                            show_tag_selector,
-                            available_tags_to_show,
+                        // RIGHT — metadata sidebar.
+                        div {
+                            class: "space-y-6",
+
+                            // Title field
+                            TextField {
+                                label: "Title".to_string(),
+                                value: title.read().clone(),
+                                oninput: move |v: String| handle_title_change_value(v),
+                                disabled: *is_submitting.read(),
+                            }
+
+                            // Slug field
+                            TextField {
+                                label: "Slug".to_string(),
+                                value: slug.read().clone(),
+                                hint: "URL-friendly version of the title (auto-generated from title if empty)".to_string(),
+                                oninput: move |v: String| {
+                                    *slug.write() = v;
+                                },
+                                disabled: *is_submitting.read(),
+                            }
+
+                            // Status field
+                            SelectField {
+                                label: "Status".to_string(),
+                                value: status.read().clone(),
+                                options: vec![
+                                    (STATUS_DRAFT.to_string(), "Draft".to_string()),
+                                    (STATUS_PUBLISHED.to_string(), "Published".to_string()),
+                                ],
+                                onchange: move |v: String| {
+                                    *status.write() = v;
+                                },
+                                disabled: *is_submitting.read(),
+                            }
+
+                            TagsField {
+                                selected_tag_ids,
+                                is_submitting: is_submitting,
+                                tag_to_remove,
+                                show_clear_all_confirmation,
+                                tags_loading,
+                                tag_badges,
+                                available_tags,
+                                show_tag_selector,
+                                available_tags_to_show,
+                            }
+
+                            // Actions — pinned under the sidebar fields.
+                            div {
+                                class: "flex flex-col gap-3 pt-2",
+
+                                Button {
+                                    variant: ButtonVariant::Primary,
+                                    disabled: *is_submitting.read(),
+                                    onclick: handle_submit,
+
+                                    if *is_submitting.read() {
+                                        "Saving..."
+                                    } else {
+                                        "{button_text}"
+                                    }
+                                }
+
+                                Button {
+                                    variant: ButtonVariant::Ghost,
+                                    disabled: *is_submitting.read(),
+                                    onclick: move |_| {
+                                        props.on_cancel.call(());
+                                    },
+                                    "Cancel"
+                                }
+                            }
                         }
                     }
-                }
-            }
-
-            // Form actions
-            div {
-                class: "bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse",
-
-                button {
-                    r#type: "button",
-                    class: "w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm",
-                    onclick: handle_submit,
-                    disabled: *is_submitting.read(),
-
-                    if *is_submitting.read() {
-                        "Saving..."
-                    } else {
-                        "{button_text}"
-                    }
-                }
-
-                button {
-                    r#type: "button",
-                    class: "mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm",
-                    onclick: move |_| {
-                        props.on_cancel.call(());
-                    },
-                    disabled: *is_submitting.read(),
-                    "Cancel"
                 }
             }
         }
@@ -1507,6 +919,22 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 selected_tag_ids,
                 tag_badges,
                 is_submitting: is_submitting,
+            }
+        }
+
+        // Image size editor — shown when the user clicked the Img↔ toolbar
+        // button while the caret was on an image.
+        if *image_size_open.read()
+            && let Some(target) = image_size_target.read().clone()
+        {
+            ImageSizeModal {
+                width: image_size_width,
+                height: image_size_height,
+                alt: target.alt.clone(),
+                url: target.url.clone(),
+                on_apply: handle_apply_image_size,
+                on_remove: handle_remove_image_size,
+                on_cancel: handle_cancel_image_size,
             }
         }
     }

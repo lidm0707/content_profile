@@ -1,0 +1,34 @@
+# Reverse proxy for the content CMS.
+#
+#   /rest/  /auth/  ->  Supabase cloud (host resolved from SUPABASE_URL)
+#   everything else ->  content_ui upstream
+#
+# The Supabase host is injected at container start (see entrypoint.sh) as
+# SUPABASE_HOST, e.g. abcdef.supabase.co. It is used through a `resolver` +
+# variable so nginx resolves it at request time instead of exiting at
+# startup when Docker's DNS has no answer yet.
+server {
+    listen 6190;
+
+    # Docker's embedded DNS server.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    location /rest/ {
+        set $supabase_upstream https://$supabase_host;
+        proxy_pass $supabase_upstream;
+        proxy_set_header Host $supabase_host;
+        proxy_ssl_server_name on;
+    }
+
+    location /auth/ {
+        set $supabase_upstream https://$supabase_host;
+        proxy_pass $supabase_upstream;
+        proxy_set_header Host $supabase_host;
+        proxy_ssl_server_name on;
+    }
+
+    location / {
+        proxy_pass http://content_ui;
+        proxy_set_header Host $host;
+    }
+}

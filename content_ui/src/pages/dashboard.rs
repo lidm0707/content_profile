@@ -339,6 +339,9 @@ pub fn Dashboard() -> Element {
                     // Content list
                     ContentTable {
                         contents: contents_data.read().clone(),
+                        // The Dashboard pages server-side below; the table's
+                        // own footer would be a second, clashing control.
+                        show_pagination: false,
                         on_edit: move |id: i32| {
                             navigator.push(Route::ContentEdit { id });
                         },

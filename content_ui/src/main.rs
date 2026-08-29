@@ -3,9 +3,9 @@ use dioxus::prelude::*;
 
 mod app;
 mod components;
-
 mod pages;
 mod routes;
+mod ui;
 
 fn init_tracing() {
     use log::Level;

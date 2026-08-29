@@ -3,7 +3,7 @@ services:
     build: .
     container_name: content_profile_playwright
     environment:
-      APP_URL: ${APP_URL:-http://content_proxy:6190}
+      APP_URL: ${APP_URL:-http://nginx:6190}
     networks:
       - content_net
     volumes:

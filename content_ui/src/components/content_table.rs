@@ -1,6 +1,7 @@
 use crate::components::Pagination;
 use std::rc::Rc;
 
+use chrono::{DateTime, Utc};
 use content_sdk::models::Content;
 use dioxus::prelude::*;
 use reslt_core::prelude::*;
@@ -9,19 +10,39 @@ use reslt_core::prelude::*;
 /// the same value here as a single source of truth.
 const PAGE_SIZE: usize = 10;
 
+/// `ContentRow` field the default (newest→oldest) sort is applied to.
+const CREATED_AT_FIELD: &str = "created_at";
+
 /// Row model for the reslt table.
 ///
 /// `Content` lives in `content_sdk` and `FieldAccessible` in `reslt_core`,
 /// so neither is local to this crate — the orphan rule forbids implementing
 /// the trait directly on `Content`. This lightweight view model mirrors the
 /// display fields as plain `String`s (keeps `Eq` trivial and sorting stable).
+/// Sort key wrapping the real `created_at`. `FieldAccessible` requires
+/// `Display` on every field, which `Option<DateTime>` lacks.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default, serde::Serialize)]
+struct Ts(Option<DateTime<Utc>>);
+
+impl std::fmt::Display for Ts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(dt) => write!(f, "{dt}"),
+            None => f.write_str(""),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, FieldAccessible)]
 pub struct ContentRow {
     pub id: i32,
     pub title: String,
     pub status: String,
     pub sync_status: String,
+    /// Display form (`%Y-%m-%d`).
     pub created_at: String,
+    /// Real timestamp for exact sorting; `None` sorts last (first ascending).
+    created_ts: Ts,
 }
 
 impl ContentRow {
@@ -41,6 +62,7 @@ impl ContentRow {
                 .created_at
                 .map(|dt| dt.format("%Y-%m-%d").to_string())
                 .unwrap_or_else(|| "N/A".to_string()),
+            created_ts: Ts(c.created_at),
         }
     }
 }
@@ -53,7 +75,11 @@ fn sort_rows(rows: &mut [ContentRow], field: &str, descending: bool) {
             "title" => a.title.cmp(&b.title),
             "status" => a.status.cmp(&b.status),
             "sync_status" => a.sync_status.cmp(&b.sync_status),
-            "created_at" => a.created_at.cmp(&b.created_at),
+            CREATED_AT_FIELD => {
+                // Exact timestamps first; the id tiebreak orders rows with
+                // equal or missing timestamps deterministically.
+                a.created_ts.cmp(&b.created_ts).then(a.id.cmp(&b.id))
+            }
             _ => std::cmp::Ordering::Equal,
         };
         if descending { ord.reverse() } else { ord }
@@ -168,6 +194,10 @@ pub struct ContentTableProps {
     /// Optional active tag filter label shown in the table header.
     #[props(default = String::new())]
     pub active_filter: String,
+    /// Whether the table's own client-side pagination footer renders. Off when
+    /// the parent already pages server-side (e.g. the Dashboard).
+    #[props(default = true)]
+    pub show_pagination: bool,
     /// Called with a content id when the Edit action is clicked. The parent
     /// typically navigates to the edit route.
     pub on_edit: EventHandler<i32>,
@@ -185,7 +215,11 @@ pub fn ContentTable(props: ContentTableProps) -> Element {
 
     // reslt_core state. We use its `SortState` / `PageState` shapes directly
     // so this component stays interoperable with reslt helpers if needed.
-    let sort_state: Signal<SortState> = use_signal(SortState::default);
+    // Default: newest first (created_at descending).
+    let sort_state: Signal<SortState> = use_signal(|| SortState {
+        column: Some(CREATED_AT_FIELD.to_string()),
+        descending: true,
+    });
     let mut page_state: Signal<PageState> = use_signal(|| PageState {
         current_page: 0,
         items_per_page: PAGE_SIZE,
@@ -325,7 +359,9 @@ pub fn ContentTable(props: ContentTableProps) -> Element {
                     }
                 }
 
-                {render_pagination(total_pages, current_page, items_per_page, total_items, page_state)}
+                if props.show_pagination {
+                    {render_pagination(total_pages, current_page, items_per_page, total_items, page_state)}
+                }
             }
         }
     }
@@ -334,6 +370,70 @@ pub fn ContentTable(props: ContentTableProps) -> Element {
 /// Pluralise "item"/"items" for the header count.
 fn row_count_label(count: usize) -> &'static str {
     if count == 1 { "item" } else { "items" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(id: i32, created: &str) -> ContentRow {
+        ContentRow {
+            id,
+            title: format!("t{id}"),
+            status: "draft".into(),
+            sync_status: "LOCAL".into(),
+            created_at: created.into(),
+            created_ts: Ts(
+                DateTime::parse_from_rfc3339(&format!("{created}T00:00:00Z"))
+                    .ok()
+                    .map(|dt| dt.with_timezone(&Utc)),
+            ),
+        }
+    }
+
+    #[test]
+    fn sort_uses_exact_timestamps_same_day() {
+        let mut rows = vec![
+            row(1, "2026-02-01"),
+            row(2, "2026-02-01"),
+            row(3, "2026-01-31"),
+        ];
+        // Make row 2 later in the same day than row 1.
+        rows[1].created_ts = Ts(rows[1]
+            .created_ts
+            .0
+            .map(|dt| dt + chrono::Duration::hours(12)));
+        sort_rows(&mut rows, CREATED_AT_FIELD, true);
+        let ids: Vec<i32> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(ids, vec![2, 1, 3]);
+    }
+
+    #[test]
+    fn sort_newest_first_with_id_tiebreak() {
+        let mut rows = vec![
+            row(1, "2026-01-01"),
+            row(3, "2026-02-01"),
+            row(2, "2026-02-01"),
+        ];
+        sort_rows(&mut rows, CREATED_AT_FIELD, true);
+        let ids: Vec<i32> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(ids, vec![3, 2, 1]);
+    }
+
+    #[test]
+    fn sort_oldest_first_on_toggle() {
+        let mut rows = vec![row(2, "2026-02-01"), row(1, "2026-01-01")];
+        sort_rows(&mut rows, CREATED_AT_FIELD, false);
+        let ids: Vec<i32> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(ids, vec![1, 2]);
+    }
+
+    #[test]
+    fn sort_by_title() {
+        let mut rows = vec![row(1, "2026-01-01"), row(2, "2026-01-02")];
+        sort_rows(&mut rows, "title", true);
+        assert_eq!(rows[0].id, 2);
+    }
 }
 
 /// Clickable, sortable column header. Renders an arrow when active.

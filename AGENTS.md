@@ -364,6 +364,27 @@ The CSS pins `white-space: pre; tab-size: 4;` on `.md-render pre` — this is
 load-bearing. Without it, leading whitespace inside `<pre>` can collapse
 under the Tailwind v4 preflight cascade. Do not remove.
 
+## Image sizing
+
+An image can carry an explicit display size via a `#img=...` URL fragment:
+
+```markdown
+![logo](photo.png#img=200x100)   <!-- width 200, height 100 -->
+![logo](photo.png#img=200)       <!-- width only, height auto -->
+![logo](photo.png#img=x100)      <!-- height only, width auto -->
+```
+
+- The `SizedImages` event adapter (`content_sdk::utils::markdown`) strips the
+  `#img=...` fragment and replaces the image node with a single `<img>` whose
+  `style="width:..px;height:..px"` wins over the responsive `.md-render img`
+  rule. The clean URL is used for `src=`.
+- The marker is `#img=` specifically (a URL fragment, not a query param), so it
+  never reaches the image host and won't collide with ordinary page anchors.
+- Plain `![alt](url)` (no marker) is untouched and stays responsive.
+- Sizes use inline styles (not HTML width/height attributes) because the base
+  `.md-render img { height: auto }` would otherwise override a bare `height`
+  attribute.
+
 ## Adding the stylesheet
 
 `markdown.css` is wired in `content_ui/src/app.rs`:

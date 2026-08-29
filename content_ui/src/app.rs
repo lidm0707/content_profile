@@ -3,8 +3,9 @@ use dioxus::prelude::*;
 
 use content_sdk::contexts::{ContentContext, ContentTagsContext, TagContext, UserContext};
 
-const FAVICON: Asset = asset!("/assets/favicon.ico");
+const FAVICON: Asset = asset!("/assets/mascot.png");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
+const THEME_CSS: Asset = asset!("/assets/theme.css");
 const MARKDOWN_CSS: Asset = asset!("/assets/markdown.css");
 
 /// Root application component that sets up the router and global providers
@@ -129,7 +130,21 @@ pub fn App() -> Element {
     rsx! {
         // Document head elements
         document::Link { rel: "icon", href: FAVICON }
+        document::Link {
+            rel: "preconnect",
+            href: "https://fonts.googleapis.com",
+        }
+        document::Link {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: "anonymous",
+        }
+        document::Link {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700;800&display=swap",
+        }
         document::Stylesheet { href: TAILWIND_CSS }
+        document::Stylesheet { href: THEME_CSS }
         document::Stylesheet { href: MARKDOWN_CSS }
 
         Router::<crate::routes::Route> {}

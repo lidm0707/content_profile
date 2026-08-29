@@ -1,12 +1,17 @@
+name: content_profile
+
 services:
-  content_proxy:
-    build:
-      context: .
-      dockerfile: proxy.Dockerfile
+  nginx:
+    image: nginx:alpine
     ports:
       - "6190:6190"
     environment:
+      # Passed raw; the entrypoint strips the scheme into SUPABASE_HOST for
+      # the nginx config template (compose can't do shell substitutions).
       SUPABASE_URL: ${SUPABASE_URL}
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/entrypoint.sh:/docker-entrypoint.d/30-resolve-supabase-host.sh:ro
     depends_on:
       - content_ui
     networks:
@@ -14,8 +19,8 @@ services:
 
   content_ui:
     build:
-      context: .
-      dockerfile: ui.Dockerfile
+      context: ..
+      dockerfile: docker/ui.Dockerfile
       args:
         APP_MODE: production
         SUPABASE_URL: ${SUPABASE_URL}

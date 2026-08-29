@@ -200,10 +200,19 @@
     background: #fafafa;
 }
 
-/* Images */
+/* Images
+   Default (unsized) images are responsive: fill up to the container width,
+   height follows aspect ratio.
+
+   Sized images — written as `![alt](url#img=WxH)` — get inline `width:`/
+   `height:` styles from the renderer, which beat this stylesheet. We keep
+   `max-width: 100%` so a wide explicit width still respects the container,
+   and `object-fit: contain` so an image constrained in both dimensions
+   doesn't distort when the container shrinks it. */
 .md-render img {
     max-width: 100%;
     height: auto;
+    object-fit: contain;
     border-radius: 8px;
     margin: 0.5em 0;
 }

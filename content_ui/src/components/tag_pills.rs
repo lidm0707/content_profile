@@ -40,9 +40,9 @@ pub fn TagPills(props: TagPillsProps) -> Element {
                     let name_for_click = name.clone();
                     let is_active = name == active;
                     let class = if is_active {
-                        "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-600 text-white shadow-sm"
+                        "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-500 text-white shadow-sm"
                     } else {
-                        "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors"
+                        "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-500/15 text-purple-200 border border-purple-400/30 hover:bg-purple-500/30 transition-colors"
                     };
 
                     rsx! {

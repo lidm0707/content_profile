@@ -1,0 +1,174 @@
+/* ============================================================
+   Theme: "和風 twilight" — dark purple base, orange accent,
+   Japanese mincho typography.
+   Loaded AFTER tailwind.css, so these overrides win the cascade.
+   ============================================================ */
+
+:root {
+  --tp-bg: #14101f;          /* page background — near-black purple */
+  --tp-panel: #1e1730;       /* cards / panels */
+  --tp-panel-2: #261d3d;     /* raised surfaces, table header */
+  --tp-border: #3a2d5c;      /* borders */
+  --tp-text: #ece7f7;        /* primary text */
+  --tp-muted: #a89ec9;       /* secondary text */
+  --tp-accent: #ff8c3b;      /* orange accent */
+  --tp-accent-soft: #ffb27a; /* orange hover / soft text */
+  --tp-purple: #7c5cff;      /* secondary purple accent */
+
+  /* Japanese + Latin pairing: Latin letters use Inter, kana/kanji fall
+     through to Noto Sans JP. Serif variant for headings. */
+  --font-body: "Inter", "Noto Sans JP", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "Meiryo", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Inter", "Noto Serif JP", "Hiragino Mincho ProN",
+    "Yu Mincho", "Noto Sans JP", ui-serif, Georgia, serif;
+}
+
+body {
+  background: var(--tp-bg);
+  color: var(--tp-text);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  letter-spacing: 0.06em;
+}
+
+/* --- Surfaces ------------------------------------------------------- */
+body .bg-white { background-color: var(--tp-panel); }
+body .bg-gray-50 { background-color: var(--tp-panel-2); }
+body .bg-gray-100 { background-color: var(--tp-panel-2); }
+body .bg-gray-50\/40,
+body .bg-gray-50\/30 { background-color: rgba(38, 29, 61, 0.4); }
+body .bg-indigo-50 { background-color: rgba(124, 92, 255, 0.16); }
+
+/* Hover/focus variants must be themed too, or they flash white. */
+body .hover\:bg-gray-50:hover { background-color: rgba(124, 92, 255, 0.12); }
+body .hover\:bg-gray-100:hover { background-color: rgba(124, 92, 255, 0.18); }
+body .hover\:bg-white:hover { background-color: var(--tp-panel-2); }
+body .hover\:bg-gray-300:hover { background-color: var(--tp-border); }
+body .focus\:bg-gray-50:focus { background-color: var(--tp-panel-2); }
+
+/* --- Borders -------------------------------------------------------- */
+body .border-gray-100 { border-color: rgba(58, 45, 92, 0.6); }
+body .border-gray-200 { border-color: var(--tp-border); }
+body .border-gray-300 { border-color: var(--tp-border); }
+body .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(58, 45, 92, 0.5);
+}
+body .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--tp-border);
+}
+
+/* --- Text ----------------------------------------------------------- */
+body .text-gray-900 { color: var(--tp-text); }
+body .text-gray-800 { color: var(--tp-text); }
+body .text-gray-700 { color: #cfc6e8; }
+body .text-gray-600 { color: var(--tp-muted); }
+body .text-gray-500 { color: var(--tp-muted); }
+body .text-gray-400 { color: #7d72a3; }
+body .text-gray-300 { color: #6b6090; }
+body .hover\:text-gray-700:hover { color: var(--tp-text); }
+body .hover\:text-gray-900:hover { color: var(--tp-text); }
+body .placeholder-gray-500::placeholder { color: #7d72a3; }
+
+/* Status badge tints (green/yellow/blue on dark panels) */
+body .bg-green-100 { background-color: rgba(52, 211, 153, 0.18); }
+body .text-green-800 { color: #6ee7b7; }
+body .bg-yellow-100 { background-color: rgba(251, 191, 36, 0.18); }
+body .text-yellow-800 { color: #fcd34d; }
+body .bg-blue-100 { background-color: rgba(96, 165, 250, 0.18); }
+body .text-blue-800 { color: #93c5fd; }
+body .bg-red-100 { background-color: rgba(248, 113, 113, 0.18); }
+body .text-red-800 { color: #fca5a5; }
+body .text-red-600 { color: #f87171; }
+body .hover\:text-red-700:hover { color: #ef4444; }
+body .hover\:bg-red-50:hover { background-color: rgba(248, 113, 113, 0.12); }
+body .bg-red-50 { background-color: rgba(248, 113, 113, 0.12); }
+body .border-red-200 { border-color: rgba(248, 113, 113, 0.4); }
+body .text-red-700 { color: #fca5a5; }
+
+/* Remaining indigo text shades used by badges/pills. */
+body .text-indigo-800 { color: var(--tp-accent-soft); }
+body .text-indigo-900 { color: var(--tp-accent-soft); }
+body .bg-indigo-200 { background-color: rgba(124, 92, 255, 0.45); }
+
+/* --- Markdown preview (dark) ----------------------------------------- */
+body .md-render { color: #d8d2ec; }
+body .md-render h1,
+body .md-render h2,
+body .md-render h3,
+body .md-render h4 { color: var(--tp-text); border-color: var(--tp-border); }
+body .md-render a { color: var(--tp-accent); }
+body .md-render a:hover { color: var(--tp-accent-soft); }
+body .md-render strong { color: var(--tp-text); }
+body .md-render code {
+  background: rgba(124, 92, 255, 0.16);
+  color: #e9d5ff;
+}
+body .md-render pre {
+  background: var(--tp-bg);
+  border: 1px solid var(--tp-border);
+  color: #d8d2ec;
+}
+body .md-render pre code { background: transparent; color: inherit; }
+body .md-render blockquote {
+  border-left-color: var(--tp-accent);
+  color: var(--tp-muted);
+  background: rgba(124, 92, 255, 0.08);
+}
+body .md-render table th {
+  background: var(--tp-panel-2);
+  color: var(--tp-text);
+  border-color: var(--tp-border);
+}
+body .md-render table td { border-color: var(--tp-border); }
+body .md-render hr { border-color: var(--tp-border); }
+body .md-render img { border-radius: 0.5rem; }
+
+/* --- Accent: indigo -> orange / purple ------------------------------ */
+body .bg-indigo-600 { background-color: var(--tp-accent); }
+body .hover\:bg-indigo-700:hover { background-color: #ff7a1f; }
+body .text-indigo-600 { color: var(--tp-accent); }
+body .hover\:text-indigo-900:hover { color: var(--tp-accent-soft); }
+body .text-indigo-700 { color: var(--tp-accent-soft); }
+body .bg-indigo-100 { background-color: rgba(124, 92, 255, 0.28); }
+body .hover\:bg-indigo-200:hover { background-color: rgba(124, 92, 255, 0.42); }
+body .hover\:bg-indigo-50:hover { background-color: rgba(124, 92, 255, 0.18); }
+body .text-indigo-400 { color: var(--tp-purple); }
+body .border-indigo-500 { border-color: var(--tp-accent); }
+body .ring-indigo-500,
+body .focus\:ring-indigo-500:focus { --tw-ring-color: var(--tp-purple); }
+body .focus\:border-indigo-500:focus { border-color: var(--tp-purple); }
+body .bg-indigo-500 { background-color: var(--tp-purple); }
+
+/* --- Form controls --------------------------------------------------- */
+body input,
+body select,
+body textarea {
+  background-color: var(--tp-panel-2);
+  color: var(--tp-text);
+  border-color: var(--tp-border);
+}
+body input::placeholder,
+body textarea::placeholder { color: #7d72a3; }
+
+/* --- Content editor: left column fills the screen -------------------- */
+body #content-body-textarea {
+  height: calc(100vh - 230px);
+  min-height: 320px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+/* --- Nav / footer polish --------------------------------------------- */
+body nav { background-color: var(--tp-panel); }
+
+/* --- Japanese accent: vertical caption helper ------------------------ */
+.jp-vertical {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.35em;
+}
+.jp-accent-bar {
+  background: linear-gradient(180deg, var(--tp-accent), var(--tp-purple));
+}
