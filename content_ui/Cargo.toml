@@ -45,6 +45,7 @@ wasm-bindgen-futures = "0.4"
 lazy_static = "1.4"
 base64 = "0.22"
 console_log = "1.0"
+console_error_panic_hook = "0.1"
 tracing-wasm = "0.2"
 getrandom = { version = "0.2", features = ["js"], optional = true }
 url = "2.5"

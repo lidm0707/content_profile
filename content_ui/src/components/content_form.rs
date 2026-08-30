@@ -445,6 +445,25 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
     let mut pending_image_pos: Signal<Option<(usize, usize)>> = use_signal(|| None);
 
     let handle_trigger_image_upload = move |_| {
+        // Re-entrancy guard. `is_uploading_image` only disables the button
+        // after a re-render, so a fast second click would call
+        // `requestAccessToken` twice (GIS blocks the extra popup) — and the
+        // synchronous wasm re-entry inside GIS then collides with Dioxus
+        // signal borrows → "RefCell already borrowed" panic.
+        if is_uploading_image() {
+            return;
+        }
+
+        // Token already acquired in a previous click? Open the file picker
+        // directly. This runs inside a real user gesture, so the picker is
+        // allowed to open (a programmatic click after the OAuth await is NOT:
+        // transient user activation has expired by then).
+        #[cfg(target_arch = "wasm32")]
+        if gdrive_token.read().is_some() {
+            document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
+            return;
+        }
+
         let client_id = match config.read().google_oauth_client_id.clone() {
             Some(id) => id,
             None => {
@@ -456,28 +475,27 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
             }
         };
 
-        is_uploading_image.set(true);
-        error_message.set(None);
-
-        // Snapshot the caret *now*, before the textarea loses focus to the
-        // popup / file picker. We restore it after the upload completes.
-        pending_image_pos.set(read_cursor_pos());
-
-        // The rest of this handler uses `content_sdk::services::drive`, which is
-        // wasm-only (it shells out to Google Identity Services via JS).
         #[cfg(target_arch = "wasm32")]
         {
             // Synchronous JS call: the OAuth popup MUST open inside this click
             // gesture, before any await. Otherwise the browser blocks it with
-            // `popup_failed_to_open`.
+            // `popup_failed_to_open`. No signal is written before this call:
+            // GIS re-enters wasm synchronously during `requestAccessToken`, and
+            // writes here would leave signal borrows in flight across that
+            // re-entry.
             let token_promise = match acquire_token_promise(&client_id) {
                 Ok(p) => p,
                 Err(msg) => {
                     error_message.set(Some(msg));
-                    is_uploading_image.set(false);
                     return;
                 }
             };
+
+            // Snapshot the caret *now*, before the textarea loses focus to the
+            // popup / file picker. We restore it after the upload completes.
+            pending_image_pos.set(read_cursor_pos());
+            is_uploading_image.set(true);
+            error_message.set(None);
 
             let mut gdrive_token_signal = gdrive_token;
             let mut error_message_signal = error_message;
@@ -495,8 +513,17 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                             return;
                         }
                         gdrive_token_signal.set(Some(token));
-                        // Sticky activation is enough for a programmatic file-picker click.
-                        document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
+                        // Transient user activation expired while the consent
+                        // flow was open, so a programmatic file-picker click
+                        // here would be blocked by the browser. Instead, keep
+                        // the token and ask the user to click the button once
+                        // more — that click opens the picker within a real
+                        // gesture (see the token branch above).
+                        is_uploading_signal.set(false);
+                        error_message_signal.set(Some(
+                            "Google login OK — click the image button again to choose a file"
+                                .to_string(),
+                        ));
                     }
                     Err(err) => {
                         let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
@@ -598,10 +625,12 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
                 Err(msg) => {
                     error!("drive upload failed: {msg}");
                     error_message_signal.set(Some(format!("Image upload failed: {msg}")));
+                    gdrive_token_signal.set(None);
                 }
             }
-            // Always clear token + upload flag after the attempt.
-            gdrive_token_signal.set(None);
+            // Keep the token on success so the next upload skips the OAuth
+            // popup; clear it on failure (e.g. expired/revoked token) so the
+            // next click re-authenticates.
             pending_pos_signal.set(None);
             is_uploading_signal.set(false);
         });

@@ -69,18 +69,28 @@ const HELPER_SCRIPT: &str = r#"
             return Promise.reject(new Error("GIS not yet loaded — retry in a moment"));
         }
         return new Promise(function (resolve, reject) {
-            const client = window.google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: SCOPE,
-                callback: function (resp) {
-                    if (resp && resp.access_token) resolve(resp.access_token);
-                    else reject(new Error("No access token in GIS response"));
-                },
-                error_callback: function (err) {
-                    reject(new Error("OAuth error: " + JSON.stringify(err)));
-                }
-            });
-            client.requestAccessToken();
+            let client;
+            try {
+                client = window.google.accounts.oauth2.initTokenClient({
+                    client_id: clientId,
+                    scope: SCOPE,
+                    callback: function (resp) {
+                        if (resp && resp.access_token) resolve(resp.access_token);
+                        else reject(new Error("No access token in GIS response: " + JSON.stringify(resp)));
+                    },
+                    error_callback: function (err) {
+                        reject(new Error("OAuth error: " + JSON.stringify(err)));
+                    }
+                });
+            } catch (e) {
+                reject(new Error("initTokenClient failed: " + (e && e.message ? e.message : String(e))));
+                return;
+            }
+            try {
+                client.requestAccessToken();
+            } catch (e) {
+                reject(new Error("requestAccessToken failed: " + (e && e.message ? e.message : String(e))));
+            }
         });
     }
 
