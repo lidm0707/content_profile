@@ -7,6 +7,7 @@
 #     make rebuild    # THE command after any UI/code change:
 #                     #   tailwind CSS -> dx build (WASM) -> docker images -> up
 #     make up         # start nginx + content_ui  (http://localhost:6190)
+#     make up-build   # one-step: build images + start (up --build)
 #     make test       # run Playwright smoke tests against the stack
 #     make logs       # watch logs            make ps: container status
 #     make down       # stop the stack        make restart: down + up
@@ -27,7 +28,7 @@
 COMPOSE := docker compose --env-file .env -f docker/docker-compose.yml
 COMPOSE_TEST := docker compose -f playwright_cli/docker-compose.test.yml
 
-.PHONY: help tailwind build up down restart logs ps test check clippy test-rust clean
+.PHONY: help tailwind build up up-build down restart logs ps test check clippy test-rust clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -44,6 +45,9 @@ build: web ## Rebuild the Docker images (always bundles fresh source)
 
 up: ## Start nginx + content_ui in the background
 	$(COMPOSE) up -d
+
+up-build: ## Build images and start in one step (docker compose up --build)
+	$(COMPOSE) up -d --build
 
 down: ## Stop the stack
 	$(COMPOSE) down

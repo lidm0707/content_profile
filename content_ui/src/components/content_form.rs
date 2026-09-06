@@ -25,6 +25,8 @@ use content_sdk::utils::{
 };
 use dioxus::prelude::*;
 use tracing::{debug, warn};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
 
 use crate::ui::{Button, ButtonVariant, SelectField, TextField};
 
@@ -460,7 +462,18 @@ pub fn ContentForm(props: ContentFormProps) -> Element {
         // transient user activation has expired by then).
         #[cfg(target_arch = "wasm32")]
         if gdrive_token.read().is_some() {
-            document::eval(r#"document.getElementById('gdrive-image-input').click();"#);
+            // Click the hidden input synchronously via web_sys. `document::eval`
+            // may not run inside the same activation window in Firefox, and a
+            // file picker opened without transient activation is silently
+            // blocked ("Opening multiple popups was blocked").
+            if let Some(input) = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.get_element_by_id("gdrive-image-input"))
+            {
+                if let Ok(el) = input.dyn_into::<web_sys::HtmlInputElement>() {
+                    el.click();
+                }
+            }
             return;
         }
 

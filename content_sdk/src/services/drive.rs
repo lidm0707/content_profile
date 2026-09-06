@@ -74,6 +74,13 @@ const HELPER_SCRIPT: &str = r#"
                 client = window.google.accounts.oauth2.initTokenClient({
                     client_id: clientId,
                     scope: SCOPE,
+                    // FedCM mode: the browser shows a native sign-in dialog
+                    // instead of a popup. Required now that Google's popup
+                    // sends COOP (Chrome blocks GIS's window.closed polling
+                    // with "Cross-Origin-Opener-Policy policy would block the
+                    // window.closed call") and Firefox blocks the popup for
+                    // lack of user activation.
+                    use_fedcm: true,
                     callback: function (resp) {
                         if (resp && resp.access_token) resolve(resp.access_token);
                         else reject(new Error("No access token in GIS response: " + JSON.stringify(resp)));
