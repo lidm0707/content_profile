@@ -295,8 +295,8 @@ Personal-tool client-side flow. Upload images directly from the editor to Google
 ## Architecture
 
 - `content_sdk::services::drive` (wasm32 only) injects a JS helper script into `<head>` that loads GIS, requests a `drive.file` token, uploads bytes via `multipart/related`, sets `anyone/reader`, and returns a `thumbnail` URL.
-- `content_ui` calls `upload_image(client_id, bytes, mime, name, folder_id)` from the content form's image button. Pass `None` for `folder_id` to upload to Drive root, or a folder ID string to target a specific folder.
-- Config: `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_DRIVE_FOLDER_ID` env vars wired through `build.rs` → `Config::google_oauth_client_id`, `Config::google_drive_folder_id`.
+- `ui_core` calls `upload_image(client_id, bytes, mime, name, folder_id)` from the content form's image button. Pass `None` for `folder_id` to upload to Drive root, or a folder ID string to target a specific folder.
+- Config: `GOOGLE_OAUTH_CLIENT_ID` env wired through `build.rs` → `Config::google_oauth_client_id`. The Drive target folder is **not** an env/build-time value — it is a per-user setting (`google_drive_folder_id` in Settings → Google, stored in pg settings); empty means Drive root.
 
 ## Setup
 
@@ -342,7 +342,7 @@ rsx! {
 
 **Always** wrap the output in a container using `MARKDOWN_CONTAINER_CLASS`
 (`md-render`). The styles for headings, lists, tables, blockquotes, code
-blocks, etc. are scoped under `.md-render` in `content_ui/assets/markdown.css`.
+blocks, etc. are scoped under `.md-render` in `ui_wasm/assets/markdown.css`.
 
 ## Do NOT use Tailwind `prose` classes
 
@@ -387,7 +387,7 @@ An image can carry an explicit display size via a `#img=...` URL fragment:
 
 ## Adding the stylesheet
 
-`markdown.css` is wired in `content_ui/src/app.rs`:
+`markdown.css` is wired in `ui_core/src/app.rs`:
 
 ```rust
 const MARKDOWN_CSS: Asset = asset!("/assets/markdown.css");
@@ -397,5 +397,5 @@ rsx! {
 }
 ```
 
-If you add new markdown element styles, edit `content_ui/assets/markdown.css`
+If you add new markdown element styles, edit `ui_wasm/assets/markdown.css`
 under the `.md-render` selector.

@@ -9,8 +9,8 @@ This project has two Docker services defined in `docker-compose.yml`:
 
 | Service | Dockerfile | Role | Port |
 |---------|-----------|------|------|
-| `content_proxy` | `Dockerfile.proxy` | Pingora reverse proxy — routes `/rest/` and `/auth/` to Supabase, everything else to `content_ui` | `6190` |
-| `content_ui` | `Dockerfile.ui` | Dioxus web app served by nginx | `80` (internal only) |
+| `content_proxy` | `Dockerfile.proxy` | Pingora reverse proxy — routes `/rest/` and `/auth/` to Supabase, everything else to `ui_core` | `6190` |
+| `ui_core` | `Dockerfile.ui` | Dioxus web app served by nginx | `80` (internal only) |
 
 Both run on the `content_net` bridge network.
 
@@ -56,7 +56,7 @@ docker compose ps -a
 
 ```sh
 docker compose logs -f content_proxy
-docker compose logs -f content_ui
+docker compose logs -f ui_core
 ```
 
 ### Stop everything
@@ -90,9 +90,9 @@ The `Dockerfile.proxy` includes `touch content_proxy/src/main.rs` before the fin
 - Exit code **137**: OOM killed. Check `docker stats`.
 - Missing `.env` vars will cause `content_proxy` to panic at startup on `env::var("SUPABASE_URL").expect(...)`.
 
-## content_ui Build Notes
+## ui_core Build Notes
 
-`Dockerfile.ui` expects the Dioxus build output at `target/dx/content_ui/release/web/public/`. Build the UI first:
+`Dockerfile.ui` expects the Dioxus build output at `target/dx/ui_core/release/web/public/`. Build the UI first:
 
 ```sh
 dx bundle --release
@@ -105,5 +105,5 @@ Then build the Docker image. The `.dockerignore` allows `target/dx/` through but
 ```
 Browser → :6190 (content_proxy)
               ├─ /rest/*, /auth/* → Supabase Cloud (HTTPS)
-              └─ /*              → content_ui:80 (nginx)
+              └─ /*              → ui_core:80 (nginx)
 ```

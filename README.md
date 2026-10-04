@@ -60,14 +60,13 @@ content_profile/
 │  │  │  └─ use_tags.rs      # Tags management hook
 │  │  └─ lib.rs              # SDK library entry point
 │  └─ Cargo.toml              # SDK dependencies
-├─ content_ui/                # UI application (Dioxus frontend)
+├─ ui_core/                # UI library (Dioxus frontend, lib-only)
 │  ├─ assets/               # Static assets (images, CSS, etc.)
 │  │  ├─ favicon.ico         # Application favicon
 │  │  ├─ tailwind.css       # Tailwind CSS v4
 │  │  └─ main.css           # Custom styles
 │  ├─ src/
-│  │  ├─ main.rs             # Application entry point
-│  │  ├─ app.rs              # Root App component
+│  │  ├─ app.rs              # `Ui` trait + UiApp shell + root App component
 │  │  ├─ routes.rs           # Route definitions
 │  │  ├─ components/          # Reusable components
 │  │  │  ├─ mod.rs           # Components module
@@ -94,10 +93,7 @@ content_profile/
 │  ├─ Cargo.toml              # UI dependencies
 │  ├─ build.rs                # Build script for environment variables
 │  └─ Dioxus.toml            # Dioxus configuration
-├─ nginx/                      # nginx reverse proxy config
-│  ├─ src/
-│  │  └─ main.rs             # Proxy server (routes to Supabase Cloud + UI)
-│  └─ Cargo.toml              # Proxy dependencies
+├─ docker/                     # Docker assets (compose, Dockerfiles, nginx config)
 ├─ supabase_client/            # Supabase client library
 │  └─ Cargo.toml              # Supabase dependencies
 ├─ playwright_cli/             # Playwright smoke tests (Dockerised)
@@ -108,9 +104,9 @@ content_profile/
 │  ├─ docker-compose.test.yml # Test container on `content_profile_content_net`
 │  ├─ Dockerfile              # Node 20 + Playwright + Chromium
 │  └─ package.json            # Yarn-managed deps
+├─ ui_wasm/                    # WASM app binary implementing ui_core's Ui trait
 ├─ build.sh                    # Host build + Docker compose script
 ├─ docker/                     # Docker assets (compose, Dockerfiles, nginx config)
-├─ Dockerfile.ui               # nginx + WASM static files
 ├─ .dockerignore               # Docker build exclusions
 ├─ .env.example                # Environment variables template
 ├─ supabase_schema.sql         # Database schema for Supabase
@@ -211,7 +207,7 @@ Image uploads in the content editor go directly to your Google Drive and return 
 2. Application type: **Web application**
 3. Add **Authorized JavaScript origins**:
    - `http://localhost:8080` (dx serve dev server)
-   - `http://localhost:6190` (nginx proxy)
+   - `http://localhost:6191` (nginx proxy)
    - Your production URL (e.g. `https://your-domain.com`)
 4. Click **Create** and copy the **Client ID** (format: `xxxxx.apps.googleusercontent.com`)
 
@@ -224,6 +220,13 @@ GOOGLE_OAUTH_CLIENT_ID=123456789-abcdefg.apps.googleusercontent.com
 ```
 
 If empty, the image upload feature silently disables — no crash.
+
+#### Set the Target Folder
+
+The Drive folder is configured **per user in the app** (Settings → Google →
+"Google Drive Folder ID"), not via env. Paste the folder ID from the Drive
+folder URL (`https://drive.google.com/drive/folders/<ID>`). Leave it empty to
+upload to My Drive root.
 
 #### Troubleshooting
 
@@ -263,39 +266,38 @@ ALTER TABLE content ENABLE ROW LEVEL SECURITY;
 
 ## 🐳 Docker Compose (Quick Start)
 
-Run the entire stack with a single command. Uses **nginx** as a reverse proxy to route API calls to Supabase Cloud and serve the WASM UI via nginx.
+Run the entire stack with a single command: nginx serves the `ui_wasm` UI and proxies API calls to the `content_backend` axum server + Postgres.
 
 ### Prerequisites
 
 - Docker & Docker Compose
 - Rust + Dioxus CLI (for host build step)
-- Supabase Cloud project with `.env` configured
+- `.env` configured (`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, …)
 
 ### Build & Run
 
 ```bash
-./build.sh
-make up
+make rebuild
 ```
 
-Open **http://localhost:6190** in your browser.
+Open **http://localhost:6191** in your browser.
 
 ### Architecture
 
 ```
-Browser → nginx (:6190)
-              ├── /rest/*, /auth/*  → Supabase Cloud (HTTPS)
-              └── /*                → content_ui (nginx + WASM)
+Browser → nginx (:6191)
+              ├── /api/*            → content_backend (axum)
+              └── /*                → ui_wasm (nginx + WASM)
 ```
 
-### What `build.sh` Does
+### What `make rebuild` Does
 
 | Step | Command | Purpose |
 |------|---------|----------|
 | 1 | `npx @tailwindcss/cli` | Build tailwind CSS |
-| 2 | `dx build --release --web` | Build WASM app |
-| 3 | — | Proxy is now the stock `nginx:alpine` image |
-| 4 | `make build` | Package artifacts into images |
+| 2 | `dx build --release --platform web --package ui_wasm` | Build WASM app |
+| 3 | `docker compose build` | Package artifacts into images |
+| 4 | `docker compose up -d` | Start the stack |
 
 ### Stop
 
@@ -312,7 +314,7 @@ make down
 Start the development server:
 
 ```bash
-dx serve
+dx serve --package ui_wasm
 ```
 
 This will:
@@ -326,16 +328,10 @@ This will:
 To build for web deployment:
 
 ```bash
-dx build --release --web --package content_ui
+dx build --release --platform web --package ui_wasm
 ```
 
-### Desktop Application
-
-To build as a desktop application:
-
-```bash
-dx serve --platform desktop
-```
+Note: `ui_core` is a library-only crate (no binary). The deployable web app is `ui_wasm`, which implements `ui_core`'s `Ui` trait.
 
 ## 📊 Database Schema
 
@@ -773,7 +769,7 @@ cargo fmt --check
 
 ### Playwright Smoke Tests (`playwright_cli/`)
 
-Dockerised Playwright (Chromium) tests that verify the Dioxus WASM app renders correctly, including authenticated pages. The test container joins the app's Docker network and reaches the proxy at `http://nginx:6190`.
+Dockerised Playwright (Chromium) tests that verify the Dioxus WASM app renders correctly, including authenticated pages. The test container joins the app's Docker network and reaches nginx at `http://nginx:80` (host port 6191).
 
 #### Prerequisites
 
@@ -782,31 +778,30 @@ The app must be running first:
 ```bash
 # from the project root
 make up
-make ps   # both nginx + content_ui must be Up
+make ps   # nginx + ui_wasm + backend + db must be Up
 ```
 
 #### Run the tests
 
 ```bash
-cd playwright_cli
 make test
 ```
 
 Rebuild the image after editing tests or fixtures:
 
 ```bash
-make test  # (or rebuild the test image: docker compose -f playwright_cli/docker-compose.test.yml build)
+make test  # (or rebuild the test image: docker compose -f docker/ui_have_backend/docker-compose.test.yml build)
 ```
 
 Point at a different URL (e.g. when running the app on localhost):
 
 ```bash
-APP_URL=http://localhost:6190 make test
+APP_URL=http://localhost:6191 make test
 ```
 
 #### Testing authenticated pages
 
-Protected routes (`/dashboard`, `/content/edit/:id`, `/tags`, `/tags/edit/:id`) require a session. The client-side check is only `now < session.expires_at` (`content_ui/src/app.rs`), with no JWT signature validation, so tests bypass login by seeding `localStorage`.
+Protected routes (`/dashboard`, `/content/edit/:id`, `/tags`, `/tags/edit/:id`) require a session. The client-side check is only `now < session.expires_at` (`ui_core/src/app.rs`), with no JWT signature validation, so tests bypass login by seeding `localStorage`.
 
 Two reusable fixtures live under `playwright_cli/tests/fixtures/`:
 
@@ -834,7 +829,7 @@ Run locally without Docker (the app must still be running):
 cd playwright_cli
 yarn install
 yarn playwright install chromium
-APP_URL=http://localhost:6190 yarn test
+APP_URL=http://localhost:6191 yarn test
 ```
 
 After a run, HTML report and failure artefacts are written to:
@@ -919,7 +914,7 @@ RUST_LOG=debug dx serve
 - Modify `assets/main.css` for custom styles
 - Edit `assets/tailwind.css` for Tailwind configuration
 - Customize colors, fonts, and spacing in components
-- **Markdown content**: edit `content_ui/assets/markdown.css` to restyle rendered markdown (headings, lists, tables, blockquotes, code blocks, etc.). All selectors are scoped under `.md-render`. To use the styles, wrap rendered HTML in a container with `content_sdk::utils::MARKDOWN_CONTAINER_CLASS` (see `AGENTS.md` → "Markdown Rendering").
+- **Markdown content**: edit `ui_wasm/assets/markdown.css` to restyle rendered markdown (headings, lists, tables, blockquotes, code blocks, etc.). All selectors are scoped under `.md-render`. To use the styles, wrap rendered HTML in a container with `content_sdk::utils::MARKDOWN_CONTAINER_CLASS` (see `AGENTS.md` → "Markdown Rendering").
 
 ### Database
 

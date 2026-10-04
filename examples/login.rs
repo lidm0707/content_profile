@@ -46,10 +46,27 @@ pub struct AuthResponse {
     pub user: User,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuthError {
-    pub error: String,
-    pub error_description: String,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub error_description: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+    #[serde(default)]
+    pub msg: Option<String>,
+}
+
+impl AuthError {
+    pub fn message(&self) -> String {
+        self.msg
+            .clone()
+            .or_else(|| self.error_description.clone())
+            .or_else(|| self.error.clone())
+            .or_else(|| self.error_code.clone())
+            .unwrap_or_else(|| "Unknown error".to_string())
+    }
 }
 
 #[derive(Clone)]
@@ -95,11 +112,12 @@ impl AuthService {
                 user: auth_response.user,
             })
         } else {
-            let error: AuthError = response.json().await.unwrap_or(AuthError {
-                error: "unknown".to_string(),
-                error_description: "Unknown error".to_string(),
-            });
-            Err(error.error_description)
+            let error: AuthError =
+                response.json().await.unwrap_or(AuthError {
+                    msg: Some("Unknown error".to_string()),
+                    ..Default::default()
+                });
+            Err(error.message())
         }
     }
 
@@ -132,11 +150,12 @@ impl AuthService {
                 user: auth_response.user,
             })
         } else {
-            let error: AuthError = response.json().await.unwrap_or(AuthError {
-                error: "unknown".to_string(),
-                error_description: "Unknown error".to_string(),
-            });
-            Err(error.error_description)
+            let error: AuthError =
+                response.json().await.unwrap_or(AuthError {
+                    msg: Some("Unknown error".to_string()),
+                    ..Default::default()
+                });
+            Err(error.message())
         }
     }
 

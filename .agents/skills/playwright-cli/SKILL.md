@@ -14,7 +14,7 @@ The app must be running before tests can pass:
 ```sh
 # from project root
 docker compose up -d
-docker compose ps -a   # both content_proxy + content_ui must be Up
+docker compose ps -a   # both content_proxy + ui_core must be Up
 ```
 
 If `content_proxy` shows `Exited (137)` it was OOM-killed — restart with `docker compose up -d`.
@@ -82,7 +82,7 @@ APP_URL=http://localhost:6190 yarn test
 
 ## Testing Protected Pages (auth-required routes)
 
-Protected routes (`/dashboard`, `/content/edit/:id`, `/tags`, `/tags/edit/:id`) require a session. The client-side check is only `now < session.expires_at` (see `content_ui/src/app.rs`), with no signature validation, so tests can bypass login by seeding localStorage.
+Protected routes (`/dashboard`, `/content/edit/:id`, `/tags`, `/tags/edit/:id`) require a session. The client-side check is only `now < session.expires_at` (see `ui_core/src/app.rs`), with no signature validation, so tests can bypass login by seeding localStorage.
 
 ### Pattern 1 — seed a fake session (UI smoke tests)
 

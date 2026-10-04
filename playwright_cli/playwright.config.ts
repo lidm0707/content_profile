@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const APP_URL = process.env.APP_URL ?? "http://nginx:6190";
+const APP_URL = process.env.APP_URL ?? "http://nginx:80";
 
 export default defineConfig({
   testDir: "./tests",

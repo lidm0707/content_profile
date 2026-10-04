@@ -1,0 +1,11 @@
+//! Pure Supabase client functions for content management
+//!
+//! This library provides pure async functions to interact with Supabase's REST API.
+
+pub mod client;
+pub mod config;
+pub mod transport;
+
+pub use client::*;
+pub use client::{count, get_by_in, get_paginated, get_paginated_with_count};
+pub use config::{ClientConfig, client_config};

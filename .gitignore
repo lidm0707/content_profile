@@ -31,3 +31,4 @@ Thumbs.db
 content_proxy/ca-certificates.crt
 playwright-report/
 test-results/
+.plans/

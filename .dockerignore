@@ -5,6 +5,11 @@ target/**
 !target/dx/content_ui/release/web/
 !target/dx/content_ui/release/web/public/
 !target/dx/content_ui/release/web/public/**
+!target/dx/ui_connect_backend/
+!target/dx/ui_connect_backend/release/
+!target/dx/ui_connect_backend/release/web/
+!target/dx/ui_connect_backend/release/web/public/
+!target/dx/ui_connect_backend/release/web/public/**
 
 node_modules/
 .git/

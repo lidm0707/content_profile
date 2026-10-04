@@ -1,0 +1,18 @@
+services:
+  playwright:
+    build:
+      context: ../../playwright_cli
+    container_name: content_profile_playwright_backend
+    environment:
+      APP_URL: http://nginx:80
+      CI: 1
+    networks:
+      - content_net
+    volumes:
+      - ../../playwright_cli/playwright-report:/app/playwright-report
+      - ../../playwright_cli/test-results:/app/test-results
+
+networks:
+  content_net:
+    external: true
+    name: content_profile_backend_content_net

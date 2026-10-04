@@ -11,7 +11,7 @@ The app must be running first (the Playwright container joins the app's network)
 docker compose up --build -d
 ```
 
-The app exposes itself on the `content_profile_content_net` Docker network as `http://content_proxy:6190`.
+The app exposes itself on the `content_profile_backend_content_net` Docker network as `http://nginx:80`.
 
 ## Run the tests
 
@@ -37,10 +37,10 @@ After a run, HTML report and failure artefacts are written to:
 ## Point at a different URL
 
 ```bash
-APP_URL=http://localhost:6190 docker compose -f docker-compose.test.yml run --rm playwright
+APP_URL=http://localhost:6191 docker compose -f docker-compose.test.yml run --rm playwright
 ```
 
-Note: `localhost` only works if the Docker daemon can route to the host. The default (`http://content_proxy:6190`) uses the shared Docker network and is recommended.
+Note: `localhost` only works if the Docker daemon can route to the host. The default (`http://nginx:80`) uses the shared Docker network and is recommended.
 
 ## Run locally (without Docker)
 
@@ -48,5 +48,5 @@ Note: `localhost` only works if the Docker daemon can route to the host. The def
 cd playwright_cli
 yarn install
 yarn playwright install chromium
-APP_URL=http://localhost:6190 yarn test
+APP_URL=http://localhost:6191 yarn test
 ```

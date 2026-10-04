@@ -1,8 +1,11 @@
 [workspace]
 members = [
-    "content_ui",
-    "supabase_client",
-    "content_sdk",
+    "crates/ui_rust/ui_core",
+    "crates/content_backend",
+    "crates/supabase_client",
+    "crates/content_sdk",
+    "crates/ui_rust/ui_wasm",
+    "crates/oauth_google",
 ]
 resolver = "2"
 
@@ -29,7 +32,7 @@ gloo-net = { version = "0.6", features = ["http"] }
 regex = "1.10"
 url = "2.5"
 # UI dependencies
-dioxus = { version = "0.7", features = ["web","router"] }
+dioxus = { version = "0.7.10", features = ["web","router"] }
 web-sys = { version = "0.3", features = ["Window", "Storage"] }
 gloo-timers = "0.3"
 lazy_static = "1.4"

@@ -1,0 +1,28 @@
+[package]
+name = "ui_wasm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Dioxus dependencies
+dioxus = { version = "0.7", features = ["web", "router"] }
+
+tracing = "0.1"
+log = "0.4.29"
+console_log = "1.0"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+
+# Reuses the ui_core pages/components and the SDK contexts.
+# Everything data-related is routed through content_backend's HTTP API.
+ui_core = { path = "../ui_core" }
+content_sdk = { path = "../../content_sdk" }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+default = ["web"]
+web = ["dioxus/web", "getrandom/js"]
+
+[build-dependencies]
+dotenvy = "0.15"
