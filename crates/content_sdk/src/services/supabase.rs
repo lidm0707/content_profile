@@ -107,7 +107,7 @@ impl SupabaseService {
             return Ok(Vec::new());
         }
         let (http, ctx) = self.http()?;
-        let in_filter = format!("in.{}", join_ids(ids));
+        let in_filter = format!("in.({})", join_ids(ids));
         let rows = http
             .get(ctx, CONTENT_TABLE, &[(ID_KEY, &in_filter)])
             .await?;

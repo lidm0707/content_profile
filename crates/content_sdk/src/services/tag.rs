@@ -329,7 +329,7 @@ impl SupabaseTagService {
         }
 
         let (http, ctx) = self.http()?;
-        let in_filter = format!("in.{}", join_ids(&content_ids));
+        let in_filter = format!("in.({})", join_ids(&content_ids));
         let rows = http.get(ctx, CONTENT_TABLE, &[("id", &in_filter)]).await?;
         decode_rows(rows)
     }
