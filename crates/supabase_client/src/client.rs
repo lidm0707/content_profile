@@ -110,7 +110,15 @@ async fn send(
     body: Option<String>,
 ) -> Result<transport::Response, String> {
     tracing::debug!("{method} {url}");
-    transport::send(method, url, headers, body).await
+    let response = transport::send(method, url, headers, body).await?;
+    if response.status >= 400 {
+        return Err(format!(
+            "HTTP {} from Supabase: {}",
+            response.status,
+            response.text()
+        ));
+    }
+    Ok(response)
 }
 
 pub async fn get<T: DeserializeOwned>(
@@ -155,7 +163,10 @@ pub async fn create<T: Serialize, R: DeserializeOwned>(
     let body =
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
-    let response_text = send("POST", &url, headers, Some(body)).await?.text().to_owned();
+    let response_text = send("POST", &url, headers, Some(body))
+        .await?
+        .text()
+        .to_owned();
 
     serde_json::from_str::<Vec<R>>(&response_text)
         .map_err(|e| format!("Failed to parse response: {}", e))
@@ -172,7 +183,10 @@ pub async fn update<T: Serialize, R: DeserializeOwned>(
     let body =
         serde_json::to_string(data).map_err(|e| format!("Failed to serialize request: {}", e))?;
 
-    let response_text = send("PATCH", &url, headers, Some(body)).await?.text().to_owned();
+    let response_text = send("PATCH", &url, headers, Some(body))
+        .await?
+        .text()
+        .to_owned();
 
     serde_json::from_str::<Vec<R>>(&response_text)
         .map_err(|e| format!("Failed to parse response: {}", e))
