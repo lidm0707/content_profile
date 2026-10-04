@@ -35,7 +35,8 @@ fn build_url(
             .filter(|(k, v)| !k.is_empty() && !v.is_empty())
             .map(|(k, v)| {
                 // Don't add eq. prefix to ordering, limit, offset, select parameters
-                let no_eq_prefix = matches!(*k, "order" | "limit" | "offset" | "select");
+                let no_eq_prefix = matches!(*k, "order" | "limit" | "offset" | "select")
+                    || starts_with_operator(v);
                 if no_eq_prefix {
                     format!("{}={}", encode(k), encode(v))
                 } else {
@@ -54,6 +55,15 @@ fn build_url(
 
 fn encode(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+}
+
+/// True when the value already carries a PostgREST operator (e.g. `in.(1,2)`),
+/// so `eq.` must not be prepended.
+fn starts_with_operator(v: &str) -> bool {
+    const OPERATORS: [&str; 11] = [
+        "eq.", "neq.", "gt.", "gte.", "lt.", "lte.", "like.", "ilike.", "is.", "in.", "cs.",
+    ];
+    OPERATORS.iter().any(|op| v.starts_with(op))
 }
 
 pub fn build_headers(
