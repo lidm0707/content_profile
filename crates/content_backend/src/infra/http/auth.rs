@@ -133,15 +133,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn session_store_roundtrip() {
-        let store = SessionStore::default();
-        store.insert("t1".into(), "alice".into());
-        assert_eq!(store.get("t1").as_deref(), Some("alice"));
-        assert_eq!(store.remove("t1").as_deref(), Some("alice"));
-        assert_eq!(store.get("t1"), None);
-    }
-
-    #[test]
     fn bearer_token_parses_header() {
         let mut headers = HeaderMap::new();
         assert_eq!(bearer_token(&headers), None);

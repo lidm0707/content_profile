@@ -36,6 +36,7 @@ const GOOGLE_CONNECTING: &str = "Connecting...";
 const GOOGLE_CONNECTED: &str = "Google Drive connected ✓";
 const GOOGLE_NOT_CONNECTED: &str = "Not connected";
 const GOOGLE_RECONNECT_BTN: &str = "Reconnect";
+#[cfg(target_arch = "wasm32")]
 const STATUS_POLL_INTERVAL_MS: u32 = 3000;
 const STATUS_TEXT_CONNECTED_CLASS: &str = "text-sm text-green-600";
 const STATUS_TEXT_CLASS: &str = "text-sm text-gray-700";
